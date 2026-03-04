@@ -1,0 +1,83 @@
+| Antes                       | Ahora                         |
+| --------------------------- | ----------------------------- |
+| Control dentro del callback | Control en loop independiente |
+| Movimiento por cada frame   | Movimiento a 5 Hz             |
+| Sin control de tiempo       | Timeout de 0.3s               |
+| Imagen full resolution      | Imagen reducida               |
+| Movimiento nervioso         | Movimiento estable            |
+
+
+
+Antes:
+
+Callback → YOLO → backlog → delay
+
+
+Ahora:
+
+Callback → guarda frame
+Loop principal → procesa SOLO el último frame
+
+
+No hay acumulación.
+
+No hay cola.
+
+No hay imágenes viejas.
+
+🎯 Resultado esperado
+
+El delay de 3 segundos debería desaparecer completamente.
+
+Si aún existiera:
+
+Entonces el problema estaría en:
+
+El propio detector (internamente acumulando)
+
+O la cámara publicando con retraso
+
+Pero en el 90% de los casos, esto lo soluciona.
+
+
+
+
+rostopic pub --once /bebop/cmd_vel geometry_msgs/Twist \
+'linear:
+  x: 0.0
+  y: 0.0
+  z: -0.6
+angular:
+  x: 0.0
+  y: 0.0
+  z: 0.0'
+
+
+Flujo actual (automático completo)
+IDLE
+  ↓ start_mission()
+TAKING_OFF
+  ↓ handle_takeoff()
+HOVER_STABILIZE
+  ↓ 2 segundos
+MISSION_RUNNING
+  ↓ recibe "done"
+LANDING
+  ↓
+IDLE
+
+
+
+rostopic pub --once /bebop/camera_control geometry_msgs/Twist \
+"linear:
+  x: 0.0
+  y: 0.0
+  z: 0.0
+angular:
+  x: 0.0
+  y: 20.0
+  z: 0.0"
+  
+  
+  
+  

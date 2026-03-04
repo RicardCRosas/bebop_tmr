@@ -1,0 +1,20 @@
+IDLE  (teleop permitido)
+   │
+   ├── tecla 'y'
+   ▼
+TAKING_OFF
+   ▼
+HOVER_STABILIZE
+   ▼
+MISSION_RUNNING
+   │
+   ├── done → LANDING → IDLE
+   ├── timeout → LANDING → IDLE
+   ├── abort → LANDING → IDLE
+   └── failed → EMERGENCY → IDLE
+   
+   para ver un topico publicado
+   
+   rostopic echo /bebop/missions_status
+   
+   rqt_graph

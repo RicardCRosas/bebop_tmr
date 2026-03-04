@@ -69,6 +69,11 @@ class BebopAdvancedController:
         self.prev_error_x = 0
         self.prev_error_y = 0
 
+        self.error_x = 0
+        self.error_y = 0
+        self.error_z = 0
+        self.error_yaw = 0
+
         self.rate = rospy.Rate(30)
 
     # =====================================================
@@ -374,38 +379,38 @@ class BebopAdvancedController:
         # ================= XY PD =================
         if self.target_x is not None:
 
-            error_x = self.target_x - rx
-            error_y = self.target_y - ry
+            self.error_x = self.target_x - rx
+            self.error_y = self.target_y - ry
 
-            d_error_x = error_x - self.prev_error_x
-            d_error_y = error_y - self.prev_error_y
+            d_error_x = self.error_x - self.prev_error_x
+            d_error_y = self.error_y - self.prev_error_y
 
-            vx = self.kp_xy * error_x + self.kd_xy * d_error_x
-            vy = self.kp_xy * error_y + self.kd_xy * d_error_y
+            vx = self.kp_xy * self.error_x + self.kd_xy * d_error_x
+            vy = self.kp_xy * self.error_y + self.kd_xy * d_error_y
 
-            self.prev_error_x = error_x
-            self.prev_error_y = error_y
+            self.prev_error_x = self.error_x
+            self.prev_error_y = self.error_y
 
-            if abs(error_x) < 0.1 and abs(error_y) < 0.1:
+            if abs(self.error_x) < 0.1 and abs(self.error_y) < 0.1:
                 vx = 0
                 vy = 0
 
         # ================= Z =================
         if self.target_z is not None:
 
-            error_z = self.target_z - rz
-            vz = self.kp_z * error_z
+            self.error_z = self.target_z - rz
+            vz = self.kp_z * self.error_z
 
-            if abs(error_z) < 0.05:
+            if abs(self.error_z) < 0.05:
                 vz = 0
 
         # ================= YAW =================
         if self.target_yaw is not None:
 
-            error_yaw = self.normalize_angle(self.target_yaw - self.current_yaw)
-            wz = self.kp_yaw * error_yaw
+            self.error_yaw = self.normalize_angle(self.target_yaw - self.current_yaw)
+            wz = self.kp_yaw * self.error_yaw
 
-            if abs(error_yaw) < math.radians(2):
+            if abs(self.error_yaw) < math.radians(2):
                 wz = 0
 
         # ================= CHECK FIN =================
@@ -420,6 +425,6 @@ class BebopAdvancedController:
             self.stop()
             return
         
-        rospy.loginfo(f"Error x: {error_x:.3f}")
+        rospy.loginfo(f"Error x: {self.error_x:.3f}")
 
         self.send_velocity(vx, vy, vz, wz)

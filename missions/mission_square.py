@@ -17,7 +17,7 @@ def main():
     status_pub = rospy.Publisher('/mission/status', String, queue_size=1)
 
 
-    # Lógica de misión aquí
+    # Lógica de misión aquíPaula
     rospy.sleep(8.0)
 
     # Cuando termina condición interna:

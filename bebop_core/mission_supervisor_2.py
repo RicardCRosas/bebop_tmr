@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# mission_supervisor.py
+# mission_supervisor_2.py
 
 import rospy
 import subprocess
@@ -80,7 +80,8 @@ class MissionSupervisor:
 
     # 🔥 EMERGENCY = evento que fuerza LANDING
     def emergency(self):
-        rospy.logerr("EMERGENCY")
+        rospy.logwarn("🚨 EMERGENCY STOP ACTIVATED")
+        rospy.logwarn("Press 'z' to deactivate the emergency stop")
 
         # 1 Matar misión inmediatamente
         self.stop_mission()
@@ -133,7 +134,7 @@ class MissionSupervisor:
     def handle_takeoff(self):
         if self.state_start_time is None:
             rospy.loginfo("TAKEOFF")
-            self.movements.initial_takeoff("automatic")
+            self.movements.takeoff()
             self.state_start_time = rospy.Time.now()
             return
         
@@ -155,7 +156,7 @@ class MissionSupervisor:
         if self.state_start_time is None:
             rospy.loginfo("LANDING")
             self.force_zero_velocity() # Asegurar velocidad cero al aterrizar
-            self.movements.landing("automatic")
+            self.movements.land()
             self.state_start_time = rospy.Time.now()
             return
 
@@ -191,12 +192,6 @@ class MissionSupervisor:
 
     def force_zero_velocity(self):
         self.movements.reset_twist()
-        #try:
-        #    self.movements.publish_twist()
-        #except AttributeError:
-        #    pass
-
-
 
     def mission_status_callback(self, msg):
 

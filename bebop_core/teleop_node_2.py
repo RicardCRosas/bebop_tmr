@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# teleop_node.py
+# teleop_node_2.py
 
 # Control manual + disparador de misiones (Supervisor) de un dron Parrot Bebop mediante teclado y ROS.
 
@@ -17,8 +17,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, '..'))
 sys.path.append(project_root)
 from control.bebop_teleop_controller import BebopMovements
-from control.bebop_advanced_controller import BebopAdvancedController
-from bebop_core.mission_supervisor import MissionSupervisor
+from control.bebop_advanced_controller_2 import BebopAdvancedController
+from bebop_core.mission_supervisor_2 import MissionSupervisor
 
 # ------------------------------
 # DICCIONARIOS DE TECLAS
@@ -52,11 +52,11 @@ Manual Control:
    a        d       -: down
         s   
 ---------------------------
-Take off: 1
 Land: 2
 ---------------------------
-Start Mission: y
-Activar Teleoperado: t
+Start Mission_square_1: y
+Start Mission_orange_window: o
+Start Teleop: t
 Emergency: x
 ---------------------------
 Cam control:

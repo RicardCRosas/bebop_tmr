@@ -53,9 +53,11 @@ class BebopMovements:
         rospy.sleep(3) # Espera a que el dron despegue completamente
 
         # Realiza pequeños movimientos automáticos tras despegar
+
         self.up(mode_flag)
+        self.up(mode_flag)    # Para que suba a la altura del gate con tiempos
         self.up(mode_flag)
-        self.up(mode_flag)
+
         # gira un poco y creo eso hace que no se empiece a mover de forma autonoma en lo que aun no ajusta la camara. FAKE
         #self.turn_right(mode_flag) 
         #self.turn_left(mode_flag) 
@@ -277,6 +279,14 @@ class BebopMovements:
         rospy.sleep(sleep)
 
 
+""" Teclas:
 
+T - teleop
+Y - mission mission_square_1.py
+O - ventanas mission_orange_window_modified.py pero no está modificado
+2 - aterrizar
+
+
+"""
 
     

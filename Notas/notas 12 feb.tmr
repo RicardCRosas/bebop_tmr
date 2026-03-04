@@ -1,0 +1,421 @@
+
+nombre del package bebop_tmr y dentro esta la carpeta de scripts
+
+ scripts
+│
+
+├── bebop_core/
+
+│     ├── teleop_node.py
+
+│     └── mission_supervisor.py
+
+├── missions/
+
+│     ├── mission_square.py
+
+│     └── mission_orange_window.py
+
+├── perception/
+
+      ├── models/
+      
+      	    └── best.pt
+
+│     └── window_orange_detector.py
+
+│     
+
+└── control/
+
+      ├── bebop_movements.py
+
+      └── bebop_PID.py
+
+
+
+Y quiero que trabaje con maquinas de estados mas o menos siguiendo este flujo
+
+stados recomendados para tu sistema
+
+
+
+Globales:
+
+
+
+IDLE                → esperando orden
+
+TAKING_OFF          → despegando
+
+HOVER_STABILIZE     → estabilizando después del despegue
+
+MISSION_RUNNING     → ejecutando misión
+
+LANDING             → aterrizando
+
+EMERGENCY           → cancelación inmediata
+
+IDLE
+  → (start_mission) → TAKING_OFF
+
+TAKING_OFF
+  → (takeoff complete) → HOVER_STABILIZE
+
+HOVER_STABILIZE
+  → (timer done) → MISSION_RUNNING
+
+MISSION_RUNNING
+  → (mission_done) → LANDING
+  → (timeout) → LANDING
+  → (abort) → LANDING
+  → (emergency) → EMERGENCY
+
+LANDING
+  → (landing complete) → IDLE
+
+EMERGENCY
+  → (after landing) → IDLE
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Haz que control y perception sean módulos Python
+
+Dentro de:
+
+bebop_tmr/control/
+bebop_tmr/perception/
+bebop_tmr/bebop_core/
+
+
+Agrega un archivo vacío llamado:
+
+__init__.py
+
+
+Ejemplo:
+
+touch control/__init__.py
+touch perception/__init__.py
+touch bebop_core/__init__.py
+
+
+Esto convierte esas carpetas en paquetes Python.
+
+
+
++*-+-*+-*+-*+-*+*-*+-*+-*+-*+
+al presionar "t" aterriza el dron, me gustaria cambiar eso para que no aterrice , si no simplemente se cambie a teleop y yo lo ppueda controlar. esto es porque al presionar "x" justamente es emergencia y ahi sí aterriza de inmediato.
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+Perfecto.
+Ahora entramos en **fase de validación pre-competencia** 🧪🚀
+
+Te voy a dar un **plan de pruebas profesional**, en orden lógico, para validar todo tu sistema paso a paso sin launch.
+
+La idea es aislar componentes y luego integrar.
+
+---
+
+# 🔵 FASE 1 — VALIDAR MOVIMIENTOS (SIN VISIÓN) + LISTO
+
+Objetivo: comprobar que el dron responde correctamente a comandos.
+
+## ✅ Prueba 1.1 – Movements manual simple
+
+Terminal 1:
+
+```
+roscore
+```
+
+Terminal 2:
+
+```
+rosrun bebop_tmr teleop_node.py
+```
+
+Prueba:
+
+* `t` → abort mission
+* Flechas o teclas de movimiento
+* Takeoff
+* Landing
+
+✔ Debe despegar
+✔ Debe moverse
+✔ Debe aterrizar
+
+Si falla aquí → no sigas.
+
+---
+
+# 🔵 FASE 2 — VALIDAR PERCEPCIÓN SOLA *+* LISTO. Sí detecta la ventana
+
+
+
+Objetivo: ver si el detector detecta correctamente la ventana.
+
+Terminal 1:
+
+```
+roscore
+```
+
+Terminal 2:
+
+```
+rosrun bebop_tmr window_orange_detector.py
+```
+
+Debes ver:
+
+* Ventana de OpenCV
+* Bounding box naranja
+* Centro marcado
+
+### 🔎 Qué validar
+
+✔ Detecta ventana naranja
+✔ No detecta falsos positivos
+✔ El centro se mueve correctamente
+✔ No crashea si no hay ventana
+
+Si `cx` sale None → tienes el bug que te mencioné.
+
+---
+
+
+# 🔵 FASE 3 — VALIDAR SUPERVISOR SOLO ++++ LISTO
+
+
+ rosrun bebop_tmr mission_supervisor.py
+[INFO] [1770955291.045501]: Mission Supervisor Ready
+[INFO] [1770955291.046590]: Supervisor test running...
+[INFO] [1770955293.049991]: TAKING OFF
+[INFO] [1770955293.053122]: [MOCK] Takeoff
+[INFO] [1770955295.055359]: HOVER STABLE → Launching mission
+[INFO] [1770955295.058254]: Launching mission: mission_square
+[WARN] [1770955325.155742]: MISSION TIMEOUT
+[INFO] [1770955325.255088]: LANDING
+[INFO] [1770955325.256601]: [MOCK] Landing
+
+[INFO] [1770955382.044841]: Mission reported DONE
+[INFO] [1770955382.055010]: LANDING
+[INFO] [1770955382.056329]: [MOCK] Landing
+[INFO] [1770955415.301980]: Mission reported DONE
+[INFO] [1770955415.355271]: LANDING
+[INFO] [1770955415.358315]: [MOCK] Landing
+[WARN] [1770955429.728476]: Mission reported FAILED
+[INFO] [1770955429.755064]: LANDING
+[INFO] [1770955429.756664]: [MOCK] Landing
+
+
+ rostopic pub /mission/status std_msgs/String "done"
+publishing and latching message. Press ctrl-C to terminate
+^Cnoetic-drones@noeticdrones-ThinkStation-P300:~$ rostopic pub /mission/status std_msgs/String "failed"
+
+
+
+
+Objetivo: comprobar FSM sin misión real.
+
+Terminal 1:
+
+```
+roscore
+```
+
+Terminal 2:
+
+```
+rosrun bebop_tmr mission_supervisor.py
+```
+
+En otra terminal simula:
+
+```
+rostopic pub /mission/status std_msgs/String "done"
+```
+
+Debe:
+
+✔ Cambiar a LANDING
+✔ Ejecutar aterrizaje
+
+Luego prueba:
+
+```
+rostopic pub /mission/status std_msgs/String "failed"
+```
+
+Debe:
+
+✔ Ir a EMERGENCY
+✔ Aterrizar
+
+# 🔵 FASE 4 — VALIDAR MISIÓN AISLADA (SIN SUPERVISOR)
+
+Objetivo: ver si la misión funciona sola.
+
+Terminal 1:
+
+```
+roscore
+```
+
+Terminal 2:
+
+```
+rosrun bebop_tmr mission_orange_window.py
+```
+
+Ahora:
+
+* Despega manualmente con teleop
+* Coloca ventana enfrente
+
+### 🔎 Qué validar
+
+✔ Si no detecta → gira buscando
+✔ Si detecta descentrado → corrige lateral
+✔ Si centrado → avanza
+✔ Tras varios avances → publica `/mission/status = done`
+
+Verifica con:
+
+```
+rostopic echo /mission/status
+```
+
+Debe aparecer:
+
+```
+data: "done"
+```
+
+Si no aparece → error en lógica de finalización.
+
+---
+---
+
+# 🔵 FASE 5 — INTEGRACIÓN COMPLETA
+
+Objetivo: probar todo junto.
+
+Terminal 1:
+
+```
+roscore
+```
+
+Terminal 2:
+
+```
+rosrun bebop_tmr teleop_node.py
+```
+
+Supervisor debería:
+
+1. TAKEOFF
+2. Hover
+3. Lanzar misión
+4. Esperar "done"
+5. LAND
+
+### 🔎 Validar
+
+✔ Despega solo
+✔ Lanza misión automáticamente
+✔ Ejecuta misión
+✔ Recibe done
+✔ Aterriza
+
+Si no aterriza → topic mal
+Si no lanza misión → rosrun mal configurado
+
+---
+
+# 🔴 PRUEBAS DE ESTRÉS (MUY IMPORTANTES)
+
+Simula errores:
+
+## ❌ Quita la ventana
+
+Debe girar buscando sin crashear.
+
+## ❌ Tapa la cámara
+
+No debe romperse.
+
+## ❌ Publica "failed"
+
+Debe aterrizar.
+
+## ❌ Mata la misión
+
+Supervisor debe detectar timeout (si lo implementaste).
+
+---
+
+# 🟡 PRUEBA DE TIEMPOS
+
+Mide:
+
+* Tiempo desde takeoff hasta landing
+* Tiempo hasta detectar ventana
+* Estabilidad de alineación
+
+En competencia, el tiempo importa.
+
+---
+
+# 🟢 CHECKLIST FINAL
+
+Antes de competencia:
+
+* [ ] No hay prints innecesarios
+* [ ] No hay cv2.imshow si no lo necesitas
+* [ ] No hay excepciones silenciosas
+* [ ] No hay warnings en consola
+* [ ] CPU usage estable
+* [ ] No hay loops infinitos
+
+---
+
+# 🔥 PRUEBA MÁS IMPORTANTE
+
+Haz esta simulación mental:
+
+> ¿Qué pasa si nunca detecta ventana?
+
+Debe:
+
+* Seguir buscando
+* No terminar misión
+* No colgarse
+
+Si eso está bien → tu sistema es robusto.
+
+---
+
+# 📊 NIVEL ACTUAL DE TU PROYECTO
+
+Arquitectura: 8/10
+Modularidad: 8/10
+Robustez: depende de los fixes
+Listo para competencia: 80%
+
+---
+
+Si quieres, ahora puedo darte:
+
+* ✅ Checklist ultra profesional tipo equipo de competición
+* ✅ Diagrama final de arquitectura limpia
+* ✅ Mejora para hacerla más inteligente con PID real
+* ✅ Sistema de watchdog por seguridad
+
+¿Quieres que lo llevemos a nivel competencia serio? 🚀
+

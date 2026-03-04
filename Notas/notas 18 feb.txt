@@ -1,0 +1,69 @@
+Caso misión automática:
+IDLE → TAKEOFF → MISSION → LANDING → IDLE
+
+Caso vuelo manual:
+IDLE → TAKEOFF → TELEOP → LANDING → IDLE.
+
+
+def handle_emergency(self):
+        if self.state_start_time is None:
+            rospy.logerr("FORCED LANDING (EMERGENCY)")
+            # 🔴 Asegurar velocidad cero otra vez
+            self.movements.reset_twist()
+
+            self.movements.landing("automatic")
+            self.state_start_time = rospy.Time.now()
+            return
+
+        elapsed = (rospy.Time.now() - self.state_start_time).to_sec()
+
+        if elapsed > 3.0:
+            self.current_mission = None
+            self.mission_start_time = None
+            self.state = GlobalState.IDLE
+            self.state_start_time = None
+
+
+
+
+MISSION SQUARE 2 INICIADA
+             [WARN] [1771454765.554888]: No odometry received yet!
+                           [WARN] [1771454765.557488]: No odometry received yet!
+  [WARN] [1771454765.559650]: No odometry received yet!
+                [WARN] [1771454765.562036]: No odometry received yet!
+                              [INFO] [1771454767.564296]: Cuadrado completado
+                                      [INFO] [1771454767.567965]: Mission reported DONE
+REVISAR QUE LA ODOMETRIA SE LEA CORRECTAMENTE
+
+
+
+[INFO] [1771455847.846431]: STATE → TAKEOFF
+           [INFO] [1771455850.848595]: Launching mission: mission_orange_window_modified
+          [INFO] [1771455850.855808]: STATE → MISSION
+              Loading model YOLO from: /home/noetic-drones/bebop_ws/src/bebop_tmr/perception/models/best.pt
+                             Loading model YOLO from: /home/noetic-drones/bebop_ws/src/bebop_tmr/perception/models/best.pt
+     [WARN] [1771455860.898393]: MISSION TIMEOUT
+         [INFO] [1771455861.400547]: STATE → LANDING
+             [INFO] [1771455861.403538]: LANDING
+Cambiar los tiempos de timeout           
+
+
+rostopic echo /bebop/odom/pose/pose
+---
+position: 
+  x: 2.2158366083395666
+  y: 0.9196661772467805
+  z: 1.9630448012895525
+orientation: 
+  x: -0.000474195276183701
+  y: -0.0025930229880117644
+  z: -0.026774735762113856
+  w: 0.9996380169318755
+---
+
+
+
+
+checar el teleop_node_2 que ya cambie con el nuveo controlador mio, que no sirvio, y lo regrese el original a como estaba pero no funciona porque camie tambien el mission supervisor
+
+

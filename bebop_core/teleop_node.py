@@ -51,11 +51,11 @@ Manual Control:
    a        d       -: down
         s   
 ---------------------------
-Take off: 1
 Land: 2
 ---------------------------
-Start Mission: y
-Abort Mission: t
+Start Mission_square_1: y
+Start Mission_orange_window: o
+Start Teleop: t
 Emergency: x
 ---------------------------
 Cam control:
@@ -151,13 +151,13 @@ class BebopTeleop:
             # INICIAR MISIÓN
             if key == 'y':
                 print("\n--- Starting Mission Square---")
-                self.supervisor.start_mission("mission_square_1") #orange_window
+                self.supervisor.start_mission("mission_square_1") 
             elif key == 'u':
                 self.supervisor.start_mission("mission_square_2")
             elif key == 'p':
                 self.supervisor.start_mission("mission_square")
             elif key == 'o':
-                self.supervisor.start_mission("mission_orange_window_modified")
+                self.supervisor.start_mission("mission_orange_window_modified") #orange_window
             elif key == 'm':
                 self.supervisor.start_mission("test_mission")
             

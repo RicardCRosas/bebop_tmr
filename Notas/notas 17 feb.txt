@@ -1,0 +1,322 @@
+rosrun bebop_tmr teleop_node.py
+
+rostopic echo /supervisor/state
+
+Y verás algo así:
+
+	data: "IDLE"
+	data: "MISSION_RUNNING"
+	data: "LANDING"
+	data: "IDLE"
+
+
+
+Tu flujo actual queda así (correcto para lo que quieres ahora):
+
+IDLE
+ → start_mission()
+MISSION_RUNNING
+ → recibe "done"
+LANDING
+ → handle_landing()
+IDLE
+
+
+Y eso está bien porque quieres aterrizaje automático.
+
+
+
+ahora asi ya no hace nada con el teclado y sigue sin  imprimir nada, quiero mejor que se muestre solo cuando se cambie de estado, pero de igual forma poder consultar el estado en el que está en cualquier momento . 
+
+
+
+
+quiero que mejor ejecute las misiones desde el piso, primero que suba hasta cierta altura, que despues se mueva hacia una cordenada en x, y y despues de estar ahi, que se estabilice ahi y despues que arranque la mision seleccionada. 
+y que se pueda acceder al modo teleoperado o a alguna de las misiones con el teclado, pero manteniendo las opciones de aterrizaje de emergencia en todo momento. dime como quedaria con estos cmabios la maquinad de estados y que con ctrl+c igualmente aterrice el dron
+
+
+-------------------------------------------
+
+Diseño recomendado
+IDLE (en tierra, motores apagados)
+TAKEOFF
+MISSION
+TELEOP
+LANDING
+EMERGENCY
+
+🔹 IDLE
+
+Solo existe en tierra.
+
+Motores desarmados.
+
+Esperando comando.
+
+Desde aquí puedes ir a:
+
+TAKEOFF
+
+EMERGENCY (si algo raro pasa)
+
+🔹 TAKEOFF
+
+Despegue automático.
+
+Cuando alcanza altura → pasa a:
+
+MISSION (si hay misión cargada)
+
+TELEOP (si no hay misión)
+
+🔹 MISSION
+
+Ejecuta waypoints.
+
+Cuando termina:
+
+Aterrizar automáticamente
+
+🔹 TELEOP (estado independiente)
+
+Este es un estado completo, no una sub-condición.
+
+En TELEOP:
+
+El dron ya está en el aire.
+
+Lee teclado continuamente.
+
+Publica velocidad continuamente.
+
+Permite:
+
+LANDING
+
+EMERGENCY
+
+🔹 LANDING
+
+
+Cuando toca suelo → pasa a IDLE.
+
+🔹 EMERGENCY
+
+Puede activarse desde cualquier estado.
+
+Prioridad máxima.
+
+Puede cortar motores o forzar aterrizaje.
+
+
++++++++++++++++++++++++++++++/+/+/+/+/+/+/
+
+
+
+Caso misión automática:
+IDLE → TAKEOFF → MISSION → LANDING → IDLE
+
+Caso vuelo manual:
+IDLE → TAKEOFF → TELEOP → LANDING → IDLE.
+
+
+
+la informacion del estado en el que se encuentra es de ver una unica vez o solo se llega a ver si tengo activo el rostopic echo /supervisor/state, quiero que al quitarlo y ponerlo otra vez me entregue l estado en el que estoy. y tambien en el take off vuelve a primero realizar la accion antes de cambiar de estado
+
+
+************************************************
+**************************************************
+
+Muy buenas preguntas 👌 aquí ya estás tocando comportamiento real de ROS.
+
+Vamos por partes.
+
+---
+
+# 🧠 1️⃣ ¿Por qué `rostopic echo /supervisor/state` no muestra nada si lo abro después?
+
+Porque tu publisher es normal:
+
+```python
+self.state_pub = rospy.Publisher("/supervisor/state", String, queue_size=1)
+```
+
+Eso significa:
+
+> Publica y olvida.
+
+Si nadie estaba escuchando en ese momento → el mensaje se pierde.
+
+---
+
+# ✅ SOLUCIÓN: Publisher **latched**
+
+En ROS1 puedes hacer que el tópico recuerde el último mensaje.
+
+Solo cambia el publisher a:
+
+```python
+self.state_pub = rospy.Publisher(
+    "/supervisor/state",
+    String,
+    queue_size=1,
+    latch=True
+)
+```
+
+🔥 Con `latch=True` pasa esto:
+
+1. Publicas un estado.
+2. Un nuevo suscriptor se conecta.
+3. Automáticamente recibe el último estado publicado.
+
+Ahora puedes:
+
+```
+rostopic echo /supervisor/state
+```
+
+Cerrar.
+Volver a abrir.
+Y siempre verás el estado actual.
+
+Eso es exactamente lo que quieres.
+
+---
+
+# 🎯 2️⃣ ¿Por qué TAKEOFF ejecuta la acción antes de cambiar de estado?
+
+Esto pasa porque tu transición se ve así:
+
+```
+state = TAKEOFF
+↓
+update()
+↓
+handle_takeoff()
+↓
+initial_takeoff()
+↓
+(espera)
+↓
+state = MISSION
+```
+
+Pero tu impresión del estado ocurre solo cuando `self.state` cambia.
+
+El detalle importante:
+
+Cuando llamas:
+
+```python
+self.supervisor.start_mission()
+```
+
+Ya hiciste:
+
+```python
+self.state = GlobalState.TAKEOFF
+```
+
+Pero el log solo se imprime cuando `update()` llama a `publish_state()`.
+
+Y como tu acción ocurre dentro de `handle_takeoff()` antes de la siguiente iteración completa del timer, parece que la acción ocurrió primero.
+
+En realidad el estado ya cambió internamente, solo que el log aparece después.
+
+---
+
+# 🔥 SOLUCIÓN CORRECTA Y PROFESIONAL
+
+Cuando cambies estado, publícalo inmediatamente.
+
+Haz esto:
+
+---
+
+## Paso 1 — Crear método de transición
+
+Agrega esto en la clase:
+
+```python
+def change_state(self, new_state):
+
+    if new_state == self.state:
+        return
+
+    self.state = new_state
+    rospy.loginfo(f"STATE → {self.state.name}")
+    self.state_pub.publish(self.state.name)
+    self.last_state = self.state
+```
+
+---
+
+## Paso 2 — Reemplaza TODOS los
+
+```python
+self.state = GlobalState.X
+```
+
+por
+
+```python
+self.change_state(GlobalState.X)
+```
+
+Ejemplo:
+
+```python
+self.change_state(GlobalState.TAKEOFF)
+```
+
+---
+
+# 🎯 ¿Qué cambia ahora?
+
+Ahora el flujo real es:
+
+```
+start_mission()
+↓
+change_state(TAKEOFF)
+↓
+SE IMPRIME INMEDIATAMENTE
+↓
+update()
+↓
+handle_takeoff()
+↓
+initial_takeoff()
+```
+
+Ahora sí:
+
+Primero cambia estado.
+Luego ejecuta acción.
+
+Como debe ser en una FSM bien hecha.
+
+---
+
+# 🧠 Resumen final
+
+✔ Usa `latch=True` para que el estado sea persistente
+✔ Usa `change_state()` para transiciones limpias
+✔ Nunca asignes `self.state = ...` directamente
+✔ Publica estado en el momento de transición
+
+---
+
+# 🚀 Ahora tu FSM ya es de arquitectura seria
+
+Si quieres, el siguiente nivel es:
+
+👉 Agregar callbacks `on_enter()` por estado
+👉 Separar transición de lógica
+👉 Hacerla completamente determinística
+
+Eso ya es nivel industrial de sistemas embebidos 😉
+
+
+

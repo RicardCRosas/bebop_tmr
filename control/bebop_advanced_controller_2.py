@@ -199,3 +199,23 @@ class BebopAdvancedController:
 
     def land(self):
         self.pub_land.publish(Empty())
+
+    # ---------------MOVIMIENTOS BÁSICOS DE LA CAMARA
+    # Controla el movimiento vertical (tilt) de la cámara.
+    #   tilt: valor angular (grados o radianes según configuración del dron). En este caso son grados
+    # Controla el movimiento horizontal (pan) de la cámara.
+    #   pan: valor angular (grados o radianes según configuración del dron). En este caso son grados
+    # 
+    # =====================================================
+    
+    def camera_tilt(self, tilt_deg):
+        cam = Twist()
+        cam.angular.y = tilt_deg
+        self.pub_camera.publish(cam)
+        print(f'\n Adjusting camera tilt: {tilt_deg} degrees...')
+
+    def camera_pan(self, pan_deg):
+        print(f'\n Adjusting camera pan: {pan_deg} degrees...')
+        cam = Twist()
+        cam.angular.z = pan_deg
+        self.pub_camera.publish(cam)

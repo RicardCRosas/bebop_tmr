@@ -1,0 +1,446 @@
+al activar el hover, se mueve en diagonal hacia atras poco a poco, no se queda en el mismo lugar. 
+no observo que intente regresar al punto target que es el deseado, solo observo que poco a poco se mueve hacia atras y en diagonal a la derecha atras
+
+incluso sin el hover sin mandarle velocidades hace lo mismo 
+
+
+
+
+cuando gira, se mueve hacia atras 
+
+cual es  la diferencia entre el mantener altura y el go to height?
+
+y no es exacto cuando hace los movimientos, quiero que sea más preciso
+
+
+
+Diferencia entre maintain_altitude y go_to_height
+✅ maintain_altitude()
+
+Es un controlador continuo.
+
+Se usa cuando:
+
+Ya estás volando
+
+Quieres mantener altura constante
+
+Se llama en cada ciclo dentro de update()
+
+Es:
+
+Loop activo permanente
+
+No bloquea.
+
+✅ go_to_height()
+
+Es bloqueante.
+
+Hace:
+
+while error > tolerancia:
+    subir/bajar
+
+Se usa para:
+
+Subir al despegar
+
+Ajuste puntual de altura
+
+Transiciones
+
+Es:
+
+Movimiento puntual hasta alcanzar altura
+🎯 Analogía
+
+maintain_altitude = cruise control
+go_to_height = subir al segundo piso
+
+
+
+
+
+
+
+noetic-drones@noeticdrones-ThinkStation-P300:~$ rostopic echo /bebop/cmd_vel
+linear: 
+  x: 0.0
+  y: -0.3
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.0
+  y: 0.3
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: -0.3
+  y: 0.0
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.0
+  y: 0.3
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.0
+  y: 0.3
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.0
+  y: 0.3
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.0
+  y: 0.3
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.3
+  y: 0.0
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.7460354098679647
+  y: -0.005426978882306542
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.41938092082408057
+  y: 0.03758121398711972
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.399603989976751
+  y: 0.040452665763901795
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.3833970966949706
+  y: 0.04124485354873187
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.32356317543752444
+  y: 0.046248361767264566
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.28620064783605964
+  y: 0.05286035590756474
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.26412422265666236
+  y: 0.05241742051934936
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.22562381710755153
+  y: 0.04954701043000819
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.19537425636707087
+  y: 0.05112958965001141
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.18364768701363157
+  y: 0.052401276533973834
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.1269141353144006
+  y: 0.051535500816223476
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.12592736117288583
+  y: 0.04504528730139474
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.10486344972199037
+  y: 0.042433268144389816
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.08702472915807788
+  y: 0.04043069246930857
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.06762212576450191
+  y: 0.039506781356091245
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.06885046159301411
+  y: 0.0344340239873288
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.06623006934195437
+  y: 0.034054601727720755
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.051169653641102694
+  y: 0.027924292385312726
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.05657783308429332
+  y: 0.029972045699822234
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.05391177101279993
+  y: 0.028601769399641385
+  z: -0.04652252197265625
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.03642845174602579
+  y: 0.02128323559910983
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.034993573726596054
+  y: 0.02163272491574879
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.027068741293312003
+  y: 0.017075800063137074
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.023230781171384284
+  y: 0.01807684407331254
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.024125273427199587
+  y: 0.019185317316867068
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.017066063344456175
+  y: 0.01672937764710472
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.02096363024642682
+  y: 0.016321946803612455
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.018345125043616604
+  y: 0.014751956511377966
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.017888546525898618
+  y: 0.015858118785192322
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: -0.3
+  y: 0.0
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+linear: 
+  x: -0.3
+  y: 0.0
+  z: 0.0
+angular: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+---
+
+
+
+
+INFO] [1772063873.931417]: Forward 1m
+[INFO] [1772063873.932947]: Current RX: 0.555935116922264
+[INFO] [1772063873.934239]: Setting target X: 1.5559351169222642
+[INFO] [1772063893.875055]: ✔ Target alcanzado
+[INFO] [1772063893.876744]: (1.5295045160420293, -0.10177180031523661, 1.053226351737976)
+
