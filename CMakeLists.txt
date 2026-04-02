@@ -8,6 +8,7 @@ project(bebop_tmr)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  cv_bridge
   geometry_msgs
   rospy
   sensor_msgs
@@ -209,7 +210,9 @@ include_directories(
 catkin_install_python(PROGRAMS
   missions/mission_orange_window.py
   missions/mission_square.py
+  missions/mission_whiteboard_aruco.py
   bebop_core/mission_supervisor.py
+  bebop_core/autonomous_mission_manager.py
   bebop_core/teleop_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

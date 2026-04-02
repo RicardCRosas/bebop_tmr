@@ -1,0 +1,16 @@
+<launch>
+    <arg name="ip" default="192.168.42.1" />
+    <arg name="mission_name" default="mission_whiteboard_aruco" />
+
+    <include file="$(find bebop_tmr)/launch/bebop_node.launch">
+        <arg name="ip" value="$(arg ip)" />
+    </include>
+
+    <node pkg="bebop_tmr"
+          type="autonomous_mission_manager.py"
+          name="autonomous_mission_manager"
+          output="screen">
+        <param name="mission_name" value="$(arg mission_name)" />
+        <param name="autostart_delay" value="3.0" />
+    </node>
+</launch>
