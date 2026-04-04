@@ -214,6 +214,8 @@ catkin_install_python(PROGRAMS
   bebop_core/mission_supervisor.py
   bebop_core/autonomous_mission_manager.py
   bebop_core/teleop_node.py
+  perception/test_aruco_bebop_camera.py
+
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
