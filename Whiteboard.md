@@ -1,4 +1,4 @@
-# Pruebas de la misión Whiteboard ArUco
+# Pruebas de la misión Whiteboard ArUco — Modo B completo
 
 ## Teclas de emergencia
 Mientras corre la misión en la terminal:
@@ -6,7 +6,7 @@ Mientras corre la misión en la terminal:
 - `q` = aterrizaje inmediato
 - `e` = emergencia dura (`/bebop/reset`)
 
-> Usar `q` si el dron sigue estable y quieres abortar.
+> Usar `q` si el dron sigue estable y quieres abortar.  
 > Usar `e` solo si hay riesgo real de choque o pérdida de control.
 
 ---
@@ -15,13 +15,15 @@ Mientras corre la misión en la terminal:
 Asegúrate de que:
 - el Bebop esté encendido
 - tu laptop esté conectada a la red del dron
-- el workspace ya esté compilado
-- `mission_supervisor.py` tenga timeout de 45 segundos
+- el workspace `bebop_ws` esté compilado
+- el workspace `catkin_ws` esté compilado
 - el ArUco esté visible frente a la cámara
+- tengas suficiente espacio libre frente al dron
+- el dron esté estable antes de empezar cada etapa
 
 ---
 
-## Recompilar
+## Recompilar `catkin_ws`
 ```bash
 cd ~/catkin_ws
 source /opt/ros/noetic/setup.bash
@@ -32,179 +34,237 @@ source devel/setup.bash
 ---
 
 # PRUEBA 1 — Solo cámara del dron
-## Terminal 1 — levantar cámara del Bebop
+
+## Terminal 1 — levantar la cámara del Bebop
 ```bash
-cd ~/catkin_ws
+cd ~
 source /opt/ros/noetic/setup.bash
-source devel/setup.bash
+source ~/bebop_ws/devel/setup.bash
+rospack find bebop_driver
 roslaunch bebop_driver bebop_node.launch
 ```
 
 ## Terminal 2 — verificar que la cámara publique
 ```bash
-cd ~/catkin_ws
+cd ~
 source /opt/ros/noetic/setup.bash
-source devel/setup.bash
+source ~/bebop_ws/devel/setup.bash
 rostopic list | grep bebop
 rostopic hz /bebop/image_raw
 ```
 
 ## Terminal 3 — test de detección ArUco
 ```bash
-cd ~/catkin_ws
+cd ~
 source /opt/ros/noetic/setup.bash
-source devel/setup.bash
+source ~/catkin_ws/devel/setup.bash
+export ROS_PACKAGE_PATH=$HOME/catkin_ws/src:$HOME/bebop_ws/src:/opt/ros/noetic/share
 rosrun bebop_tmr test_aruco_bebop_camera.py
 ```
 
-## Resultado esperado
-- La cámara del dron publica en `/bebop/image_raw`
-- Se abre una ventana
-- El ArUco se detecta
-- Aparecen `id`, `err_x`, `err_y`, `area`
-
 ---
 
-# PRUEBA 2 — Misión Whiteboard por etapas
+# PRUEBA 2 — Misión por etapas en vuelo
 
-## Terminal 1 — cámara del dron
+## Terminal 1 — levantar la cámara del Bebop
 ```bash
-cd ~/catkin_ws
+cd ~
 source /opt/ros/noetic/setup.bash
-source devel/setup.bash
+source ~/bebop_ws/devel/setup.bash
+rospack find bebop_driver
 roslaunch bebop_driver bebop_node.launch
 ```
 
 ## Terminal 2 — verificar imagen
 ```bash
-cd ~/catkin_ws
+cd ~
 source /opt/ros/noetic/setup.bash
-source devel/setup.bash
+source ~/bebop_ws/devel/setup.bash
 rostopic hz /bebop/image_raw
 ```
 
-## Terminal 3 — etapa 1: buscar y alinear
+## Terminal 3 — despegue manual
 ```bash
-cd ~/catkin_ws
+cd ~
 source /opt/ros/noetic/setup.bash
-source devel/setup.bash
+source ~/bebop_ws/devel/setup.bash
+rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
+```
+
+> Esperar unos segundos a que el dron suba y se estabilice antes de correr la etapa.
+
+---
+
+## Etapa 1 — buscar y alinear
+### Terminal 4
+```bash
+cd ~
+source /opt/ros/noetic/setup.bash
+source ~/catkin_ws/devel/setup.bash
+export ROS_PACKAGE_PATH=$HOME/catkin_ws/src:$HOME/bebop_ws/src:/opt/ros/noetic/share
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=search_align _show_debug:=true
 ```
 
-## Resultado esperado
+### Resultado esperado
 - Detecta el ArUco
-- Se alinea visualmente
-- No falla
-- Puedes abortar con `q` o `e`
+- Se alinea al centro
+- Corrige orientación frente al pizarrón
+- NO se aproxima todavía
+
+### Al terminar — aterrizaje manual
+```bash
+rostopic pub --once /bebop/land std_msgs/Empty "{}"
+```
 
 ---
 
-## Terminal 3 — etapa 2: aproximación
+## Etapa 2 — aproximación segura
+### Terminal 3 — despegar otra vez
 ```bash
-cd ~/catkin_ws
+cd ~
 source /opt/ros/noetic/setup.bash
-source devel/setup.bash
+source ~/bebop_ws/devel/setup.bash
+rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
+```
+
+### Terminal 4
+```bash
+cd ~
+source /opt/ros/noetic/setup.bash
+source ~/catkin_ws/devel/setup.bash
+export ROS_PACKAGE_PATH=$HOME/catkin_ws/src:$HOME/bebop_ws/src:/opt/ros/noetic/share
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=approach _show_debug:=true
 ```
 
-## Resultado esperado
-- Detecta
+### Resultado esperado
 - Se alinea
-- Se acerca de forma segura
-- No se pega demasiado al pizarrón
+- Se aproxima MUY lento
+- Usa odometría para detenerse
+- NO choca
+- NO se acerca demasiado
 
----
-
-## Terminal 3 — etapa 3: punto de inicio del trazo
+### Al terminar — aterrizaje manual
 ```bash
-cd ~/catkin_ws
-source /opt/ros/noetic/setup.bash
-source devel/setup.bash
-rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=draw_start _show_debug:=true
+rostopic pub --once /bebop/land std_msgs/Empty "{}"
 ```
 
-## Resultado esperado
-- Ya no apunta solo al centro del ArUco
-- Se mueve al punto estimado para comenzar a pintar
-
 ---
 
-## Terminal 3 — etapa 4: toque del pizarrón
+## Etapa 3 — pre-dibujo
+### Terminal 3 — despegar otra vez
 ```bash
-cd ~/catkin_ws
+cd ~
 source /opt/ros/noetic/setup.bash
-source devel/setup.bash
-rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=touch _show_debug:=true
+source ~/bebop_ws/devel/setup.bash
+rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
 ```
 
-## Resultado esperado
-- Avanza muy lento
-- Confirma toque usando visión + odometría
-- No empuja demasiado
-- Si pierde el ArUco cerca del pizarrón, retrocede
+### Terminal 4
+```bash
+cd ~
+source /opt/ros/noetic/setup.bash
+source ~/catkin_ws/devel/setup.bash
+export ROS_PACKAGE_PATH=$HOME/catkin_ws/src:$HOME/bebop_ws/src:/opt/ros/noetic/share
+rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=pre_draw _show_debug:=true
+```
+
+### Resultado esperado
+- Se alinea
+- Hace la aproximación segura
+- Se acerca un poco más
+- Se detiene listo para dibujar
+
+### Al terminar — aterrizaje manual
+```bash
+rostopic pub --once /bebop/land std_msgs/Empty "{}"
+```
 
 ---
 
-## Terminal 3 — etapa 5: dibujar línea
+## Etapa 4 — dibujar
+### Terminal 3 — despegar otra vez
 ```bash
-cd ~/catkin_ws
+cd ~
 source /opt/ros/noetic/setup.bash
-source devel/setup.bash
+source ~/bebop_ws/devel/setup.bash
+rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
+```
+
+### Terminal 4
+```bash
+cd ~
+source /opt/ros/noetic/setup.bash
+source ~/catkin_ws/devel/setup.bash
+export ROS_PACKAGE_PATH=$HOME/catkin_ws/src:$HOME/bebop_ws/src:/opt/ros/noetic/share
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=draw _show_debug:=true
 ```
 
-## Resultado esperado
-- Toca el pizarrón
-- Dibuja línea horizontal
-- Retrocede después
+### Resultado esperado
+- Se alinea
+- Se aproxima seguro
+- Hace pre-dibujo
+- Traza la línea
+- Se queda estable
+
+### Al terminar — aterrizaje manual
+```bash
+rostopic pub --once /bebop/land std_msgs/Empty "{}"
+```
 
 ---
 
-## Terminal 3 — etapa 6: misión completa
+## Etapa 5 — misión completa
+### Terminal 3 — despegar otra vez
 ```bash
-cd ~/catkin_ws
+cd ~
 source /opt/ros/noetic/setup.bash
-source devel/setup.bash
+source ~/bebop_ws/devel/setup.bash
+rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
+```
+
+### Terminal 4
+```bash
+cd ~
+source /opt/ros/noetic/setup.bash
+source ~/catkin_ws/devel/setup.bash
+export ROS_PACKAGE_PATH=$HOME/catkin_ws/src:$HOME/bebop_ws/src:/opt/ros/noetic/share
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=full _show_debug:=true
 ```
 
-## Resultado esperado
+### Resultado esperado
 La misión completa debe hacer:
 
 1. ajustar cámara
 2. buscar ArUco
-3. alinearse
-4. aproximarse sin chocar
-5. llegar al punto de inicio del trazo
-6. confirmar toque del pizarrón
-7. dibujar la línea
-8. retroceder
-9. girar 90° a la derecha
-10. aterrizar
+3. alinearse al pizarrón
+4. aproximarse a distancia segura
+5. acercarse un poco más
+6. dibujar la línea
+7. separarse del pizarrón
+8. aterrizar
 
 ---
 
 # PRUEBA 3 — Ver comandos del dron
+
 ## Terminal extra opcional
 ```bash
-cd ~/catkin_ws
+cd ~
 source /opt/ros/noetic/setup.bash
-source devel/setup.bash
+source ~/catkin_ws/devel/setup.bash
+export ROS_PACKAGE_PATH=$HOME/catkin_ws/src:$HOME/bebop_ws/src:/opt/ros/noetic/share
 rostopic echo /bebop/cmd_vel
 ```
-
-## Resultado esperado
-- Ver cómo cambian los comandos al mover el ArUco
-- Confirmar si la lógica está alineando, acercando o retrocediendo
 
 ---
 
 # PRUEBA 4 — Ver imagen directa del dron
+
 ## Terminal extra opcional
 ```bash
-cd ~/catkin_ws
+cd ~
 source /opt/ros/noetic/setup.bash
-source devel/setup.bash
+source ~/bebop_ws/devel/setup.bash
 rqt_image_view
 ```
 
@@ -216,14 +276,13 @@ Luego seleccionar:
 
 ---
 
-# Orden recomendado para probar ahorita
+# Orden recomendado
 1. `test_aruco_bebop_camera.py`
 2. `search_align`
 3. `approach`
-4. `draw_start`
-5. `touch`
-6. `draw`
-7. `full`
+4. `pre_draw`
+5. `draw`
+6. `full`
 
 ---
 

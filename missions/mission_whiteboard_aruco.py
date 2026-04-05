@@ -10,6 +10,7 @@ import threading
 import select
 import termios
 import tty
+import numpy as np
 
 from sensor_msgs.msg import Image
 from std_msgs.msg import String, Empty
@@ -29,23 +30,20 @@ from perception.aruco_whiteboard_detector import ArucoWhiteboardDetector
 
 class MissionWhiteboardAruco:
     """
-    Mision robusta para whiteboard:
-      1) ajustar camara
-      2) buscar ArUco
-      3) alinearse
-      4) aproximarse de forma segura
-      5) moverse al punto de inicio del trazo
-      6) tocar el pizarron (confirmacion por vision + odometria)
-      7) dibujar linea
-      8) retroceder
-      9) girar 90 grados a la derecha
-     10) aterrizar
+    Versión estable para pruebas de:
+      - search_align
+      - approach
+
+    Objetivo:
+      - no exigir alineación perfecta
+      - no perder el ArUco tan fácil
+      - no acercarse demasiado
+      - corregir sin avanzar cuando esté desalineado
     """
 
     def __init__(self):
-        rospy.init_node('mission_whiteboard_aruco')
+        rospy.init_node("mission_whiteboard_aruco")
 
-        # Publishers
         self.pub_cmd = rospy.Publisher('/bebop/cmd_vel', Twist, queue_size=1)
         self.pub_takeoff = rospy.Publisher('/bebop/takeoff', Empty, queue_size=1)
         self.pub_land = rospy.Publisher('/bebop/land', Empty, queue_size=1)
@@ -53,7 +51,6 @@ class MissionWhiteboardAruco:
         self.pub_camera = rospy.Publisher('/bebop/camera_control', Twist, queue_size=1)
         self.status_pub = rospy.Publisher('/mission/status', String, queue_size=1)
 
-        # Helpers
         self.movements = BebopMovements(
             self.pub_cmd,
             self.pub_takeoff,
@@ -64,7 +61,6 @@ class MissionWhiteboardAruco:
         self.detector = ArucoWhiteboardDetector()
         self.bridge = CvBridge()
 
-        # Subscribers
         self.image_sub = rospy.Subscriber(
             "/bebop/image_raw",
             Image,
@@ -80,12 +76,11 @@ class MissionWhiteboardAruco:
             queue_size=1
         )
 
-        # Vision
+        # Imagen / detección
         self.latest_image_msg = None
         self.latest_data = None
         self.debug_image = None
         self.last_detection_time = None
-        self.prev_area = None
 
         # Odom
         self.current_x = None
@@ -93,91 +88,75 @@ class MissionWhiteboardAruco:
         self.current_z = None
         self.current_yaw = None
 
-        # Touch reference
-        self.touch_start_x = None
-        self.touch_start_y = None
-        self.touch_start_z = None
+        # Refs
+        self.approach_start_x = None
+        self.approach_start_y = None
+        self.approach_start_z = None
 
-        # State
+        # Estado
         self.finished = False
         self.state = "SET_CAMERA"
         self.state_start_time = rospy.Time.now()
         self.start_time = rospy.Time.now()
 
-        # Rotation refs
-        self.rotate_yaw_start = None
-        self.rotate_yaw_target = None
+        # Detección / recuperación
+        self.detect_stable_count = 0
+        self.lost_count = 0
+        self.recover_return_state = None
 
-        # Contact flag
-        self.board_contact_confirmed = False
-
-        # Emergency flags
+        # Emergencia
         self.abort_land_requested = False
         self.emergency_reset_requested = False
-        self.keyboard_thread = None
         self.term_settings = None
+        self.keyboard_thread = None
 
         # -------------------------
         # Params
         # -------------------------
-        self.test_mode = rospy.get_param("~test_mode", "full")
+        self.test_mode = rospy.get_param("~test_mode", "approach")
         self.show_debug = rospy.get_param("~show_debug", True)
         self.image_width = rospy.get_param("~image_width", 640)
         self.image_height = rospy.get_param("~image_height", 360)
 
-        # Camera
-        self.camera_tilt_start = rospy.get_param("~camera_tilt_start", 20.0)
+        self.camera_tilt_start = rospy.get_param("~camera_tilt_start", 18.0)
         self.camera_pan_start = rospy.get_param("~camera_pan_start", 0.0)
-        self.camera_settle_time = rospy.get_param("~camera_settle_time", 1.2)
+        self.camera_settle_time = rospy.get_param("~camera_settle_time", 1.5)
 
-        # Centering tolerances
-        self.center_tolerance_x = rospy.get_param("~center_tolerance_x", 35)
-        self.center_tolerance_y = rospy.get_param("~center_tolerance_y", 30)
+        # Tolerancias MÁS abiertas
+        self.center_tolerance_x = rospy.get_param("~center_tolerance_x", 40)
+        self.center_tolerance_y = rospy.get_param("~center_tolerance_y", 34)
+        self.visual_yaw_tolerance = rospy.get_param("~visual_yaw_tolerance", 0.11)
 
-        self.draw_target_tolerance_x = rospy.get_param("~draw_target_tolerance_x", 30)
-        self.draw_target_tolerance_y = rospy.get_param("~draw_target_tolerance_y", 30)
+        # Tolerancias aún más abiertas para permitir avanzar
+        self.approach_tolerance_x = rospy.get_param("~approach_tolerance_x", 55)
+        self.approach_tolerance_y = rospy.get_param("~approach_tolerance_y", 45)
+        self.approach_visual_yaw_tolerance = rospy.get_param("~approach_visual_yaw_tolerance", 0.16)
 
-        # Areas
-        self.approach_area_safe = rospy.get_param("~approach_area_safe", 12000)
-        self.approach_area_near = rospy.get_param("~approach_area_near", 17000)
-        self.touch_area_threshold = rospy.get_param("~touch_area_threshold", 23500)
-        self.touch_confirm_area = rospy.get_param("~touch_confirm_area", 26000)
-        self.max_safe_area = rospy.get_param("~max_safe_area", 32000)
+        # Histeresis fuerte
+        self.min_stable_detections = rospy.get_param("~min_stable_detections", 10)
+        self.max_lost_before_search = rospy.get_param("~max_lost_before_search", 22)
+        self.recover_hold_time = rospy.get_param("~recover_hold_time", 1.2)
+        self.align_hold_time = rospy.get_param("~align_hold_time", 0.8)
 
-        # Speeds
-        self.search_yaw_speed = rospy.get_param("~search_yaw_speed", 0.18)
-        self.align_lateral_speed = rospy.get_param("~align_lateral_speed", 0.14)
-        self.align_vertical_speed = rospy.get_param("~align_vertical_speed", 0.12)
+        # Velocidades MÁS bajas
+        self.search_yaw_speed = rospy.get_param("~search_yaw_speed", 0.03)
+        self.align_lateral_speed = rospy.get_param("~align_lateral_speed", 0.02)
+        self.align_vertical_speed = rospy.get_param("~align_vertical_speed", 0.02)
 
-        self.approach_speed_far = rospy.get_param("~approach_speed_far", 0.10)
-        self.approach_speed_near = rospy.get_param("~approach_speed_near", 0.055)
+        self.approach_speed = rospy.get_param("~approach_speed", 0.004)
+        self.approach_yaw_gain = rospy.get_param("~approach_yaw_gain", 0.28)
+        self.approach_yaw_max = rospy.get_param("~approach_yaw_max", 0.025)
 
-        self.touch_forward_speed = rospy.get_param("~touch_forward_speed", 0.04)
-        self.touch_forward_time_max = rospy.get_param("~touch_forward_time_max", 1.3)
+        # Más distancia segura = detenerse antes
+        self.safe_approach_distance = rospy.get_param("~safe_approach_distance", 0.07)
+        self.safe_approach_timeout = rospy.get_param("~safe_approach_timeout", 3.5)
 
-        self.draw_forward_bias = rospy.get_param("~draw_forward_bias", 0.02)
-        self.draw_lateral_speed = rospy.get_param("~draw_lateral_speed", -0.12)
-        self.draw_time = rospy.get_param("~draw_time", 1.7)
+        # Freno visual más conservador
+        self.max_safe_area = rospy.get_param("~max_safe_area", 4200)
 
-        self.backoff_speed = rospy.get_param("~backoff_speed", -0.10)
-        self.backoff_time = rospy.get_param("~backoff_time", 1.4)
+        self.max_mission_time = rospy.get_param("~max_mission_time", 35.0)
 
-        self.rotate_right_speed = rospy.get_param("~rotate_right_speed", -0.22)
-        self.rotate_timeout = rospy.get_param("~rotate_timeout", 5.0)
-        self.rotate_yaw_tolerance = rospy.get_param("~rotate_yaw_tolerance", 0.10)
-
-        # Detection / safety times
-        self.detection_timeout = rospy.get_param("~detection_timeout", 0.5)
-        self.marker_lost_timeout = rospy.get_param("~marker_lost_timeout", 0.7)
-        self.max_mission_time = rospy.get_param("~max_mission_time", 45.0)
-        self.post_land_wait = rospy.get_param("~post_land_wait", 2.0)
-
-        # Odom-based touch confirmation
-        self.touch_min_progress_for_no_contact = rospy.get_param("~touch_min_progress_for_no_contact", 0.05)
-        self.touch_low_progress_threshold = rospy.get_param("~touch_low_progress_threshold", 0.025)
-        self.area_growth_small_threshold = rospy.get_param("~area_growth_small_threshold", 350.0)
-
-        rospy.loginfo("MissionWhiteboardAruco initialized")
+        rospy.loginfo("MissionWhiteboardAruco BETTER STABLE version initialized")
         rospy.loginfo(f"test_mode = {self.test_mode}")
 
     # =====================================================
@@ -223,7 +202,6 @@ class MissionWhiteboardAruco:
         if self.emergency_reset_requested:
             self.stop()
             rospy.sleep(0.1)
-            rospy.logerr("Enviando /bebop/reset ...")
             self.pub_reset.publish(Empty())
             self.status_pub.publish("failed")
             self.finished = True
@@ -232,7 +210,6 @@ class MissionWhiteboardAruco:
         if self.abort_land_requested:
             self.stop()
             rospy.sleep(0.1)
-            rospy.logwarn("Enviando /bebop/land ...")
             self.pub_land.publish(Empty())
             self.status_pub.publish("failed")
             self.finished = True
@@ -287,6 +264,11 @@ class MissionWhiteboardAruco:
 
         if data["detected"]:
             self.last_detection_time = rospy.Time.now()
+            self.detect_stable_count += 1
+            self.lost_count = 0
+        else:
+            self.detect_stable_count = 0
+            self.lost_count += 1
 
     def set_camera_pose(self, tilt_deg, pan_deg):
         cam = Twist()
@@ -294,37 +276,26 @@ class MissionWhiteboardAruco:
         cam.angular.z = pan_deg
         self.pub_camera.publish(cam)
 
-    def set_state(self, new_state):
+    def set_state(self, new_state, recover_return_state=None):
         if self.state != new_state:
             rospy.loginfo(f"MISSION STATE -> {new_state}")
             self.state = new_state
             self.state_start_time = rospy.Time.now()
             self.stop()
 
-            if new_state == "TOUCH_BOARD" and self.has_odom():
-                self.touch_start_x = self.current_x
-                self.touch_start_y = self.current_y
-                self.touch_start_z = self.current_z
+            if new_state == "APPROACH_BOARD" and self.has_odom():
+                self.approach_start_x = self.current_x
+                self.approach_start_y = self.current_y
+                self.approach_start_z = self.current_z
 
-            if new_state == "ROTATE_RIGHT_90":
-                self.rotate_yaw_start = None
-                self.rotate_yaw_target = None
+            if new_state == "RECOVER_MARKER":
+                self.recover_return_state = recover_return_state
 
     def elapsed_in_state(self):
         return (rospy.Time.now() - self.state_start_time).to_sec()
 
     def mission_elapsed(self):
         return (rospy.Time.now() - self.start_time).to_sec()
-
-    def detection_recent(self):
-        if self.last_detection_time is None:
-            return False
-        return (rospy.Time.now() - self.last_detection_time).to_sec() < self.detection_timeout
-
-    def marker_lost_for_too_long(self):
-        if self.last_detection_time is None:
-            return True
-        return (rospy.Time.now() - self.last_detection_time).to_sec() > self.marker_lost_timeout
 
     def publish_direct_twist(self, lx=0.0, ly=0.0, lz=0.0, az=0.0):
         msg = Twist()
@@ -337,28 +308,47 @@ class MissionWhiteboardAruco:
     def stop(self):
         self.movements.reset_twist()
 
-    def normalize_angle(self, a):
-        return math.atan2(math.sin(a), math.cos(a))
-
-    def odom_progress_since_touch_start(self):
+    def odom_distance_since_approach_start(self):
         if not self.has_odom():
             return None
-        if self.touch_start_x is None or self.touch_start_y is None or self.touch_start_z is None:
+        if self.approach_start_x is None:
             return None
 
-        dx = self.current_x - self.touch_start_x
-        dy = self.current_y - self.touch_start_y
-        dz = self.current_z - self.touch_start_z
+        dx = self.current_x - self.approach_start_x
+        dy = self.current_y - self.approach_start_y
+        dz = self.current_z - self.approach_start_z
         return math.sqrt(dx * dx + dy * dy + dz * dz)
 
-    def area_growth_small(self, current_area):
-        if self.prev_area is None:
-            self.prev_area = current_area
-            return False
+    def compute_visual_yaw_error(self, data):
+        pts = data.get("corners", None)
+        if pts is None or len(pts) != 4:
+            return 0.0
 
-        delta = abs(current_area - self.prev_area)
-        self.prev_area = current_area
-        return delta < self.area_growth_small_threshold
+        pts = np.array(pts, dtype=np.float32)
+        tl, tr, br, bl = pts
+
+        top_angle = math.atan2((tr[1] - tl[1]), (tr[0] - tl[0]))
+        left_h = np.linalg.norm(bl - tl)
+        right_h = np.linalg.norm(br - tr)
+        avg_h = max((left_h + right_h) / 2.0, 1e-6)
+        side_asym = (left_h - right_h) / avg_h
+
+        return (0.8 * side_asym) + (0.7 * top_angle)
+
+    def should_finish_after(self, mode_name):
+        order = {
+            "search_align": 1,
+            "approach": 2,
+        }
+
+        current_stage_map = {
+            "ALIGN_OK": 1,
+            "APPROACH_OK": 2,
+        }
+
+        wanted = order.get(self.test_mode, 2)
+        current = current_stage_map.get(mode_name, 999)
+        return current >= wanted
 
     def finish_mission(self):
         self.stop()
@@ -372,39 +362,14 @@ class MissionWhiteboardAruco:
         self.status_pub.publish("failed")
         self.finished = True
 
-    def should_finish_after(self, mode_name):
-        order = {
-            "search_align": 1,
-            "approach": 2,
-            "draw_start": 3,
-            "touch": 4,
-            "draw": 5,
-            "full": 6,
-        }
-
-        current_stage_map = {
-            "ALIGN_OK": 1,
-            "APPROACH_OK": 2,
-            "DRAW_START_OK": 3,
-            "TOUCH_OK": 4,
-            "DRAW_OK": 5,
-            "FULL_OK": 6,
-        }
-
-        wanted = order.get(self.test_mode, 6)
-        current = current_stage_map.get(mode_name, 999)
-        return current >= wanted
-
     # =====================================================
     # States
     # =====================================================
 
     def handle_set_camera(self):
         self.set_camera_pose(self.camera_tilt_start, self.camera_pan_start)
-
         if self.elapsed_in_state() < self.camera_settle_time:
             return
-
         self.set_state("SEARCH_ARUCO")
 
     def handle_search_aruco(self):
@@ -414,20 +379,32 @@ class MissionWhiteboardAruco:
             self.publish_direct_twist(az=self.search_yaw_speed)
             return
 
+        if self.detect_stable_count < self.min_stable_detections:
+            self.stop()
+            return
+
         self.set_state("ALIGN_TO_MARKER")
 
     def handle_align_to_marker(self):
         data = self.latest_data
 
-        if data is None or not self.detection_recent() or not data["detected"]:
-            self.set_state("SEARCH_ARUCO")
+        if data is None or not data["detected"]:
+            if self.lost_count > self.max_lost_before_search:
+                self.set_state("RECOVER_MARKER", recover_return_state="ALIGN_TO_MARKER")
             return
 
         err_x = data["error_x"]
         err_y = data["error_y"]
+        yaw_error = self.compute_visual_yaw_error(data)
 
         aligned_x = abs(err_x) <= self.center_tolerance_x
         aligned_y = abs(err_y) <= self.center_tolerance_y
+        aligned_yaw = abs(yaw_error) <= self.visual_yaw_tolerance
+
+        if not aligned_yaw:
+            wz = max(min(self.approach_yaw_gain * yaw_error, self.approach_yaw_max), -self.approach_yaw_max)
+            self.publish_direct_twist(az=wz)
+            return
 
         if not aligned_x:
             if err_x < 0:
@@ -443,7 +420,11 @@ class MissionWhiteboardAruco:
                 self.publish_direct_twist(lz=-self.align_vertical_speed)
             return
 
+        # NO busca perfección instantánea; mantiene hover un poco
         self.stop()
+
+        if self.elapsed_in_state() < self.align_hold_time:
+            return
 
         if self.should_finish_after("ALIGN_OK"):
             self.finish_mission()
@@ -454,253 +435,90 @@ class MissionWhiteboardAruco:
     def handle_approach_board(self):
         data = self.latest_data
 
-        if data is None or not data["detected"] or self.marker_lost_for_too_long():
+        if data is None or not data["detected"]:
             self.stop()
-            self.set_state("SEARCH_ARUCO")
+            if self.lost_count > self.max_lost_before_search:
+                self.set_state("RECOVER_MARKER", recover_return_state="APPROACH_BOARD")
+            return
+
+        area = data["area"]
+        if area >= self.max_safe_area:
+            rospy.logwarn("Área demasiado alta. Frenando por seguridad.")
+            self.stop()
+            self.finish_mission()
             return
 
         err_x = data["error_x"]
         err_y = data["error_y"]
-        area = data["area"]
+        yaw_error = self.compute_visual_yaw_error(data)
 
-        if area >= self.max_safe_area:
-            rospy.logwarn("Area demasiado alta; frenando para evitar choque.")
-            self.stop()
-            self.set_state("MOVE_TO_DRAW_START")
-            return
+        ly = 0.0
+        lz = 0.0
+        wz = 0.0
 
-        if abs(err_x) > self.center_tolerance_x:
-            if err_x < 0:
-                self.publish_direct_twist(ly=self.align_lateral_speed * 0.75)
-            else:
-                self.publish_direct_twist(ly=-self.align_lateral_speed * 0.75)
-            return
+        if abs(err_x) > self.approach_tolerance_x:
+            ly = self.align_lateral_speed if err_x < 0 else -self.align_lateral_speed
 
-        if abs(err_y) > self.center_tolerance_y:
-            if err_y < 0:
-                self.publish_direct_twist(lz=self.align_vertical_speed * 0.75)
-            else:
-                self.publish_direct_twist(lz=-self.align_vertical_speed * 0.75)
-            return
+        if abs(err_y) > self.approach_tolerance_y:
+            lz = self.align_vertical_speed if err_y < 0 else -self.align_vertical_speed
 
-        if area < self.approach_area_safe:
-            self.publish_direct_twist(lx=self.approach_speed_far)
-            return
+        if abs(yaw_error) > self.approach_visual_yaw_tolerance:
+            wz = max(min(self.approach_yaw_gain * yaw_error, self.approach_yaw_max), -self.approach_yaw_max)
 
-        if area < self.approach_area_near:
-            self.publish_direct_twist(lx=self.approach_speed_near)
-            return
-
-        self.stop()
-
-        if self.should_finish_after("APPROACH_OK"):
-            self.finish_mission()
-            return
-
-        self.set_state("MOVE_TO_DRAW_START")
-
-    def handle_move_to_draw_start(self):
-        data = self.latest_data
-
-        if data is None or not data["detected"] or self.marker_lost_for_too_long():
-            rospy.logwarn("Se perdio el ArUco cerca del pizarron. Reintentando busqueda.")
-            self.stop()
-            self.set_state("SEARCH_ARUCO")
-            return
-
-        tx = data["target_draw_x"]
-        ty = data["target_draw_y"]
-
-        if tx is None or ty is None:
-            self.set_state("SEARCH_ARUCO")
-            return
-
-        img_cx = data["center_x"]
-        img_cy = data["center_y"]
-
-        err_x = tx - img_cx
-        err_y = ty - img_cy
-        area = data["area"]
-
-        aligned_x = abs(err_x) <= self.draw_target_tolerance_x
-        aligned_y = abs(err_y) <= self.draw_target_tolerance_y
-
-        if not aligned_x:
-            if err_x < 0:
-                self.publish_direct_twist(ly=self.align_lateral_speed * 0.75)
-            else:
-                self.publish_direct_twist(ly=-self.align_lateral_speed * 0.75)
-            return
-
-        if not aligned_y:
-            if err_y < 0:
-                self.publish_direct_twist(lz=self.align_vertical_speed * 0.75)
-            else:
-                self.publish_direct_twist(lz=-self.align_vertical_speed * 0.75)
-            return
-
-        if area < self.touch_area_threshold:
-            self.publish_direct_twist(lx=self.approach_speed_near)
-            return
-
-        self.stop()
-
-        if self.should_finish_after("DRAW_START_OK"):
-            self.finish_mission()
-            return
-
-        self.set_state("TOUCH_BOARD")
-
-    def handle_touch_board(self):
-        data = self.latest_data
-
-        if data is None or self.marker_lost_for_too_long():
-            rospy.logwarn("Referencia perdida en toque. Retrocediendo por seguridad.")
-            self.stop()
-            self.set_state("BACK_OFF")
-            return
-
-        area = data["area"]
-        tx = data["target_draw_x"]
-        ty = data["target_draw_y"]
-        elapsed = self.elapsed_in_state()
-
-        # Alineacion final al punto de dibujo
-        err_x = tx - data["center_x"] if tx is not None else 0
-        err_y = ty - data["center_y"] if ty is not None else 0
-        aligned_draw = (
-            abs(err_x) <= self.draw_target_tolerance_x and
-            abs(err_y) <= self.draw_target_tolerance_y
+        misaligned = (
+            abs(err_x) > self.approach_tolerance_x or
+            abs(err_y) > self.approach_tolerance_y or
+            abs(yaw_error) > self.approach_visual_yaw_tolerance
         )
 
-        progress = self.odom_progress_since_touch_start()
-        growth_small = self.area_growth_small(area)
+        progress = self.odom_distance_since_approach_start()
 
-        # Confirmacion combinada:
-        # 1) vision fuerte
-        if area >= self.touch_confirm_area and aligned_draw:
-            rospy.loginfo("Toque confirmado por vision fuerte.")
-            self.board_contact_confirmed = True
+        if progress is not None and progress >= self.safe_approach_distance:
+            rospy.loginfo(f"Distancia segura alcanzada por odometría: {progress:.3f} m")
             self.stop()
-
-            if self.should_finish_after("TOUCH_OK"):
-                self.finish_mission()
-                return
-
-            self.set_state("DRAW_LINE")
+            self.finish_mission()
             return
 
-        # 2) vision + poco avance real + tiempo corto
-        if elapsed >= 0.45 and progress is not None:
-            if area >= self.touch_area_threshold and progress <= self.touch_low_progress_threshold and growth_small:
-                rospy.loginfo(
-                    f"Toque confirmado por vision + odometria. area={area:.1f}, progress={progress:.4f}"
-                )
-                self.board_contact_confirmed = True
-                self.stop()
-
-                if self.should_finish_after("TOUCH_OK"):
-                    self.finish_mission()
-                    return
-
-                self.set_state("DRAW_LINE")
-                return
-
-        # 3) timeout final controlado
-        if elapsed >= self.touch_forward_time_max:
-            rospy.loginfo("Tiempo maximo de toque alcanzado. Confirmando toque controlado.")
-            self.board_contact_confirmed = True
+        if self.elapsed_in_state() > self.safe_approach_timeout:
+            rospy.logwarn("Timeout en APPROACH_BOARD. Deteniendo por seguridad.")
             self.stop()
-
-            if self.should_finish_after("TOUCH_OK"):
-                self.finish_mission()
-                return
-
-            self.set_state("DRAW_LINE")
+            self.finish_mission()
             return
 
-        self.publish_direct_twist(lx=self.touch_forward_speed)
-
-    def handle_draw_line(self):
-        if not self.board_contact_confirmed:
-            rospy.logwarn("No hay contacto confirmado. Cancelando trazo.")
-            self.set_state("BACK_OFF")
-            return
-
-        elapsed = self.elapsed_in_state()
-
-        if elapsed < self.draw_time:
+        # si se desalineó, corrige sin avanzar
+        if misaligned:
             self.publish_direct_twist(
-                lx=self.draw_forward_bias,
-                ly=self.draw_lateral_speed
+                lx=0.0,
+                ly=ly,
+                lz=lz,
+                az=wz
             )
             return
 
+        # solo avanza cuando ya está suficientemente bien colocado
+        self.publish_direct_twist(
+            lx=self.approach_speed,
+            ly=0.0,
+            lz=0.0,
+            az=0.0
+        )
+
+    def handle_recover_marker(self):
+        """
+        Hover y espera un momento a que el ArUco reaparezca.
+        No se va directo a SEARCH.
+        """
         self.stop()
 
-        if self.should_finish_after("DRAW_OK"):
-            self.finish_mission()
-            return
-
-        self.set_state("BACK_OFF")
-
-    def handle_back_off(self):
-        elapsed = self.elapsed_in_state()
-
-        if elapsed < self.backoff_time:
-            self.publish_direct_twist(lx=self.backoff_speed)
-            return
-
-        self.stop()
-        self.set_state("ROTATE_RIGHT_90")
-
-    def handle_rotate_right_90(self):
-        if self.current_yaw is not None:
-            if self.rotate_yaw_start is None:
-                self.rotate_yaw_start = self.current_yaw
-                self.rotate_yaw_target = self.normalize_angle(self.rotate_yaw_start - math.pi / 2.0)
-                rospy.loginfo(
-                    f"Rotacion derecha 90 iniciada. yaw_start={self.rotate_yaw_start:.3f}, yaw_target={self.rotate_yaw_target:.3f}"
-                )
-
-            yaw_error = self.normalize_angle(self.rotate_yaw_target - self.current_yaw)
-
-            if abs(yaw_error) <= self.rotate_yaw_tolerance:
-                self.stop()
-                self.set_state("LAND")
+        data = self.latest_data
+        if data is not None and data["detected"]:
+            if self.detect_stable_count >= self.min_stable_detections:
+                next_state = self.recover_return_state if self.recover_return_state is not None else "ALIGN_TO_MARKER"
+                self.set_state(next_state)
                 return
 
-            if self.elapsed_in_state() > self.rotate_timeout:
-                rospy.logwarn("Timeout en rotacion. Continuando a aterrizaje.")
-                self.stop()
-                self.set_state("LAND")
-                return
-
-            self.publish_direct_twist(az=self.rotate_right_speed)
-            return
-
-        # Fallback si no hay yaw
-        if self.elapsed_in_state() < 2.0:
-            self.publish_direct_twist(az=self.rotate_right_speed)
-            return
-
-        self.stop()
-        self.set_state("LAND")
-
-    def handle_land(self):
-        self.stop()
-        rospy.sleep(0.2)
-        rospy.loginfo("Aterrizando...")
-        self.pub_land.publish(Empty())
-        rospy.sleep(self.post_land_wait)
-        self.set_state("DONE")
-
-    def handle_done(self):
-        self.finish_mission()
-
-    # =====================================================
-    # Main logic
-    # =====================================================
+        if self.elapsed_in_state() > self.recover_hold_time:
+            self.set_state("SEARCH_ARUCO")
 
     def control_logic(self):
         if self.finished:
@@ -718,20 +536,8 @@ class MissionWhiteboardAruco:
             self.handle_align_to_marker()
         elif self.state == "APPROACH_BOARD":
             self.handle_approach_board()
-        elif self.state == "MOVE_TO_DRAW_START":
-            self.handle_move_to_draw_start()
-        elif self.state == "TOUCH_BOARD":
-            self.handle_touch_board()
-        elif self.state == "DRAW_LINE":
-            self.handle_draw_line()
-        elif self.state == "BACK_OFF":
-            self.handle_back_off()
-        elif self.state == "ROTATE_RIGHT_90":
-            self.handle_rotate_right_90()
-        elif self.state == "LAND":
-            self.handle_land()
-        elif self.state == "DONE":
-            self.handle_done()
+        elif self.state == "RECOVER_MARKER":
+            self.handle_recover_marker()
         else:
             self.fail_mission(f"unknown_state_{self.state}")
 
