@@ -30,20 +30,27 @@ from perception.aruco_whiteboard_detector import ArucoWhiteboardDetector
 
 class MissionWhiteboardAruco:
     """
-    Versión estable para pruebas de:
+    Misión whiteboard corregida.
+
+    Modos:
       - search_align
       - approach
+      - pre_draw
+      - draw
+      - full
 
-    Objetivo:
-      - no exigir alineación perfecta
-      - no perder el ArUco tan fácil
-      - no acercarse demasiado
-      - corregir sin avanzar cuando esté desalineado
+    Filosofía:
+      - no buscar alineación perfecta imposible
+      - no perder el ArUco por una pérdida pequeña
+      - avanzar solo cuando esté suficientemente alineado
+      - usar odometría como criterio principal de acercamiento
+      - usar el área solo como freno secundario
     """
 
     def __init__(self):
         rospy.init_node("mission_whiteboard_aruco")
 
+        # Publishers
         self.pub_cmd = rospy.Publisher('/bebop/cmd_vel', Twist, queue_size=1)
         self.pub_takeoff = rospy.Publisher('/bebop/takeoff', Empty, queue_size=1)
         self.pub_land = rospy.Publisher('/bebop/land', Empty, queue_size=1)
@@ -61,6 +68,7 @@ class MissionWhiteboardAruco:
         self.detector = ArucoWhiteboardDetector()
         self.bridge = CvBridge()
 
+        # Subscribers
         self.image_sub = rospy.Subscriber(
             "/bebop/image_raw",
             Image,
@@ -76,7 +84,7 @@ class MissionWhiteboardAruco:
             queue_size=1
         )
 
-        # Imagen / detección
+        # Vision
         self.latest_image_msg = None
         self.latest_data = None
         self.debug_image = None
@@ -88,23 +96,30 @@ class MissionWhiteboardAruco:
         self.current_z = None
         self.current_yaw = None
 
-        # Refs
+        # References
         self.approach_start_x = None
         self.approach_start_y = None
         self.approach_start_z = None
 
-        # Estado
+        self.predraw_start_x = None
+        self.predraw_start_y = None
+        self.predraw_start_z = None
+
+        self.rotate_yaw_start = None
+        self.rotate_yaw_target = None
+        self.recover_return_state = None
+
+        # Mission state
         self.finished = False
         self.state = "SET_CAMERA"
         self.state_start_time = rospy.Time.now()
         self.start_time = rospy.Time.now()
 
-        # Detección / recuperación
+        # Detection hysteresis
         self.detect_stable_count = 0
         self.lost_count = 0
-        self.recover_return_state = None
 
-        # Emergencia
+        # Emergency
         self.abort_land_requested = False
         self.emergency_reset_requested = False
         self.term_settings = None
@@ -118,45 +133,70 @@ class MissionWhiteboardAruco:
         self.image_width = rospy.get_param("~image_width", 640)
         self.image_height = rospy.get_param("~image_height", 360)
 
+        # Camera
         self.camera_tilt_start = rospy.get_param("~camera_tilt_start", 18.0)
         self.camera_pan_start = rospy.get_param("~camera_pan_start", 0.0)
         self.camera_settle_time = rospy.get_param("~camera_settle_time", 1.5)
 
-        # Tolerancias MÁS abiertas
-        self.center_tolerance_x = rospy.get_param("~center_tolerance_x", 40)
+        # Alignment tolerances
+        # Más abiertas para no buscar una perfección imposible
+        self.center_tolerance_x = rospy.get_param("~center_tolerance_x", 42)
         self.center_tolerance_y = rospy.get_param("~center_tolerance_y", 34)
-        self.visual_yaw_tolerance = rospy.get_param("~visual_yaw_tolerance", 0.11)
+        self.visual_yaw_tolerance = rospy.get_param("~visual_yaw_tolerance", 0.12)
 
-        # Tolerancias aún más abiertas para permitir avanzar
-        self.approach_tolerance_x = rospy.get_param("~approach_tolerance_x", 55)
-        self.approach_tolerance_y = rospy.get_param("~approach_tolerance_y", 45)
-        self.approach_visual_yaw_tolerance = rospy.get_param("~approach_visual_yaw_tolerance", 0.16)
+        # Para approach: aún más margen antes de bloquear avance
+        self.approach_tolerance_x = rospy.get_param("~approach_tolerance_x", 60)
+        self.approach_tolerance_y = rospy.get_param("~approach_tolerance_y", 48)
+        self.approach_visual_yaw_tolerance = rospy.get_param("~approach_visual_yaw_tolerance", 0.18)
 
         # Histeresis fuerte
         self.min_stable_detections = rospy.get_param("~min_stable_detections", 10)
-        self.max_lost_before_search = rospy.get_param("~max_lost_before_search", 22)
+        self.max_lost_before_recover = rospy.get_param("~max_lost_before_recover", 18)
         self.recover_hold_time = rospy.get_param("~recover_hold_time", 1.2)
         self.align_hold_time = rospy.get_param("~align_hold_time", 0.8)
 
-        # Velocidades MÁS bajas
-        self.search_yaw_speed = rospy.get_param("~search_yaw_speed", 0.03)
-        self.align_lateral_speed = rospy.get_param("~align_lateral_speed", 0.02)
-        self.align_vertical_speed = rospy.get_param("~align_vertical_speed", 0.02)
+        # Velocidades muy suaves
+        self.search_yaw_speed = rospy.get_param("~search_yaw_speed", 0.025)
+        self.align_lateral_speed = rospy.get_param("~align_lateral_speed", 0.018)
+        self.align_vertical_speed = rospy.get_param("~align_vertical_speed", 0.018)
 
-        self.approach_speed = rospy.get_param("~approach_speed", 0.004)
-        self.approach_yaw_gain = rospy.get_param("~approach_yaw_gain", 0.28)
-        self.approach_yaw_max = rospy.get_param("~approach_yaw_max", 0.025)
+        self.approach_speed = rospy.get_param("~approach_speed", 0.0035)
+        self.approach_yaw_gain = rospy.get_param("~approach_yaw_gain", 0.22)
+        self.approach_yaw_max = rospy.get_param("~approach_yaw_max", 0.020)
 
-        # Más distancia segura = detenerse antes
-        self.safe_approach_distance = rospy.get_param("~safe_approach_distance", 0.07)
+        # IMPORTANTE:
+        # esta es la distancia que el dron RECORRE desde que empieza approach.
+        # más pequeña = se queda más lejos del pizarrón
+        self.safe_approach_travel = rospy.get_param("~safe_approach_travel", 0.05)
         self.safe_approach_timeout = rospy.get_param("~safe_approach_timeout", 3.5)
 
-        # Freno visual más conservador
-        self.max_safe_area = rospy.get_param("~max_safe_area", 4200)
+        # Freno visual secundario
+        self.max_safe_area = rospy.get_param("~max_safe_area", 3800)
 
-        self.max_mission_time = rospy.get_param("~max_mission_time", 35.0)
+        # Pre-draw: acercamiento muy pequeño extra
+        self.pre_draw_speed = rospy.get_param("~pre_draw_speed", 0.004)
+        self.pre_draw_travel = rospy.get_param("~pre_draw_travel", 0.004)
+        self.pre_draw_timeout = rospy.get_param("~pre_draw_timeout", 1.0)
 
-        rospy.loginfo("MissionWhiteboardAruco BETTER STABLE version initialized")
+        # Dibujo
+        self.draw_forward_bias = rospy.get_param("~draw_forward_bias", 0.004)
+        self.draw_lateral_speed = rospy.get_param("~draw_lateral_speed", -0.045)
+        self.draw_time = rospy.get_param("~draw_time", 0.9)
+
+        # Separación
+        self.backoff_speed = rospy.get_param("~backoff_speed", -0.05)
+        self.backoff_time = rospy.get_param("~backoff_time", 1.1)
+
+        # Giro opcional
+        self.enable_rotate_before_land = rospy.get_param("~enable_rotate_before_land", False)
+        self.rotate_right_speed = rospy.get_param("~rotate_right_speed", -0.12)
+        self.rotate_timeout = rospy.get_param("~rotate_timeout", 2.5)
+        self.rotate_yaw_tolerance = rospy.get_param("~rotate_yaw_tolerance", 0.12)
+
+        self.max_mission_time = rospy.get_param("~max_mission_time", 45.0)
+        self.post_land_wait = rospy.get_param("~post_land_wait", 2.0)
+
+        rospy.loginfo("MissionWhiteboardAruco FINAL stable version initialized")
         rospy.loginfo(f"test_mode = {self.test_mode}")
 
     # =====================================================
@@ -257,7 +297,8 @@ class MissionWhiteboardAruco:
             return
 
         frame = cv2.resize(frame, (self.image_width, self.image_height))
-        processed_image, data = self.detector.process_image(frame)
+        show_draw_ref = self.state in ["PRE_DRAW", "DRAW_LINE", "BACK_OFF", "LAND"]
+        processed_image, data = self.detector.process_image(frame, show_draw_ref=show_draw_ref)
 
         self.debug_image = processed_image
         self.latest_data = data
@@ -288,8 +329,17 @@ class MissionWhiteboardAruco:
                 self.approach_start_y = self.current_y
                 self.approach_start_z = self.current_z
 
+            if new_state == "PRE_DRAW" and self.has_odom():
+                self.predraw_start_x = self.current_x
+                self.predraw_start_y = self.current_y
+                self.predraw_start_z = self.current_z
+
             if new_state == "RECOVER_MARKER":
                 self.recover_return_state = recover_return_state
+
+            if new_state == "ROTATE_RIGHT_90":
+                self.rotate_yaw_start = None
+                self.rotate_yaw_target = None
 
     def elapsed_in_state(self):
         return (rospy.Time.now() - self.state_start_time).to_sec()
@@ -308,15 +358,15 @@ class MissionWhiteboardAruco:
     def stop(self):
         self.movements.reset_twist()
 
-    def odom_distance_since_approach_start(self):
+    def odom_distance(self, x0, y0, z0):
         if not self.has_odom():
             return None
-        if self.approach_start_x is None:
+        if x0 is None:
             return None
 
-        dx = self.current_x - self.approach_start_x
-        dy = self.current_y - self.approach_start_y
-        dz = self.current_z - self.approach_start_z
+        dx = self.current_x - x0
+        dy = self.current_y - y0
+        dz = self.current_z - z0
         return math.sqrt(dx * dx + dy * dy + dz * dz)
 
     def compute_visual_yaw_error(self, data):
@@ -339,14 +389,20 @@ class MissionWhiteboardAruco:
         order = {
             "search_align": 1,
             "approach": 2,
+            "pre_draw": 3,
+            "draw": 4,
+            "full": 5,
         }
 
         current_stage_map = {
             "ALIGN_OK": 1,
             "APPROACH_OK": 2,
+            "PREDRAW_OK": 3,
+            "DRAW_OK": 4,
+            "FULL_OK": 5,
         }
 
-        wanted = order.get(self.test_mode, 2)
+        wanted = order.get(self.test_mode, 5)
         current = current_stage_map.get(mode_name, 999)
         return current >= wanted
 
@@ -389,7 +445,7 @@ class MissionWhiteboardAruco:
         data = self.latest_data
 
         if data is None or not data["detected"]:
-            if self.lost_count > self.max_lost_before_search:
+            if self.lost_count > self.max_lost_before_recover:
                 self.set_state("RECOVER_MARKER", recover_return_state="ALIGN_TO_MARKER")
             return
 
@@ -402,7 +458,8 @@ class MissionWhiteboardAruco:
         aligned_yaw = abs(yaw_error) <= self.visual_yaw_tolerance
 
         if not aligned_yaw:
-            wz = max(min(self.approach_yaw_gain * yaw_error, self.approach_yaw_max), -self.approach_yaw_max)
+            wz = max(min(self.approach_yaw_gain * yaw_error, self.approach_yaw_max),
+                     -self.approach_yaw_max)
             self.publish_direct_twist(az=wz)
             return
 
@@ -420,7 +477,6 @@ class MissionWhiteboardAruco:
                 self.publish_direct_twist(lz=-self.align_vertical_speed)
             return
 
-        # NO busca perfección instantánea; mantiene hover un poco
         self.stop()
 
         if self.elapsed_in_state() < self.align_hold_time:
@@ -437,7 +493,7 @@ class MissionWhiteboardAruco:
 
         if data is None or not data["detected"]:
             self.stop()
-            if self.lost_count > self.max_lost_before_search:
+            if self.lost_count > self.max_lost_before_recover:
                 self.set_state("RECOVER_MARKER", recover_return_state="APPROACH_BOARD")
             return
 
@@ -445,7 +501,12 @@ class MissionWhiteboardAruco:
         if area >= self.max_safe_area:
             rospy.logwarn("Área demasiado alta. Frenando por seguridad.")
             self.stop()
-            self.finish_mission()
+
+            if self.should_finish_after("APPROACH_OK"):
+                self.finish_mission()
+                return
+
+            self.set_state("PRE_DRAW")
             return
 
         err_x = data["error_x"]
@@ -463,7 +524,8 @@ class MissionWhiteboardAruco:
             lz = self.align_vertical_speed if err_y < 0 else -self.align_vertical_speed
 
         if abs(yaw_error) > self.approach_visual_yaw_tolerance:
-            wz = max(min(self.approach_yaw_gain * yaw_error, self.approach_yaw_max), -self.approach_yaw_max)
+            wz = max(min(self.approach_yaw_gain * yaw_error, self.approach_yaw_max),
+                     -self.approach_yaw_max)
 
         misaligned = (
             abs(err_x) > self.approach_tolerance_x or
@@ -471,21 +533,35 @@ class MissionWhiteboardAruco:
             abs(yaw_error) > self.approach_visual_yaw_tolerance
         )
 
-        progress = self.odom_distance_since_approach_start()
+        progress = self.odom_distance(
+            self.approach_start_x,
+            self.approach_start_y,
+            self.approach_start_z
+        )
 
-        if progress is not None and progress >= self.safe_approach_distance:
+        if progress is not None and progress >= self.safe_approach_travel:
             rospy.loginfo(f"Distancia segura alcanzada por odometría: {progress:.3f} m")
             self.stop()
-            self.finish_mission()
+
+            if self.should_finish_after("APPROACH_OK"):
+                self.finish_mission()
+                return
+
+            self.set_state("PRE_DRAW")
             return
 
         if self.elapsed_in_state() > self.safe_approach_timeout:
             rospy.logwarn("Timeout en APPROACH_BOARD. Deteniendo por seguridad.")
             self.stop()
-            self.finish_mission()
+
+            if self.should_finish_after("APPROACH_OK"):
+                self.finish_mission()
+                return
+
+            self.set_state("PRE_DRAW")
             return
 
-        # si se desalineó, corrige sin avanzar
+        # corrige sin avanzar si sigue chueco
         if misaligned:
             self.publish_direct_twist(
                 lx=0.0,
@@ -495,7 +571,7 @@ class MissionWhiteboardAruco:
             )
             return
 
-        # solo avanza cuando ya está suficientemente bien colocado
+        # solo avanza si ya está suficientemente bien colocado
         self.publish_direct_twist(
             lx=self.approach_speed,
             ly=0.0,
@@ -503,11 +579,128 @@ class MissionWhiteboardAruco:
             az=0.0
         )
 
+    def handle_pre_draw(self):
+        data = self.latest_data
+
+        if data is None or not data["detected"]:
+            self.stop()
+            if self.lost_count > self.max_lost_before_recover:
+                self.set_state("RECOVER_MARKER", recover_return_state="PRE_DRAW")
+            return
+
+        area = data["area"]
+        if area >= self.max_safe_area:
+            self.stop()
+
+            if self.should_finish_after("PREDRAW_OK"):
+                self.finish_mission()
+                return
+
+            self.set_state("DRAW_LINE")
+            return
+
+        err_x = data["error_x"]
+        err_y = data["error_y"]
+        yaw_error = self.compute_visual_yaw_error(data)
+
+        ly = 0.0
+        lz = 0.0
+        wz = 0.0
+
+        if abs(err_x) > self.approach_tolerance_x:
+            ly = self.align_lateral_speed if err_x < 0 else -self.align_lateral_speed
+
+        if abs(err_y) > self.approach_tolerance_y:
+            lz = self.align_vertical_speed if err_y < 0 else -self.align_vertical_speed
+
+        if abs(yaw_error) > self.approach_visual_yaw_tolerance:
+            wz = max(min(self.approach_yaw_gain * yaw_error, self.approach_yaw_max),
+                     -self.approach_yaw_max)
+
+        misaligned = (
+            abs(err_x) > self.approach_tolerance_x or
+            abs(err_y) > self.approach_tolerance_y or
+            abs(yaw_error) > self.approach_visual_yaw_tolerance
+        )
+
+        progress = self.odom_distance(
+            self.predraw_start_x,
+            self.predraw_start_y,
+            self.predraw_start_z
+        )
+
+        if progress is not None and progress >= self.pre_draw_travel:
+            self.stop()
+
+            if self.should_finish_after("PREDRAW_OK"):
+                self.finish_mission()
+                return
+
+            self.set_state("DRAW_LINE")
+            return
+
+        if self.elapsed_in_state() > self.pre_draw_timeout:
+            self.stop()
+
+            if self.should_finish_after("PREDRAW_OK"):
+                self.finish_mission()
+                return
+
+            self.set_state("DRAW_LINE")
+            return
+
+        if misaligned:
+            self.publish_direct_twist(
+                lx=0.0,
+                ly=ly,
+                lz=lz,
+                az=wz
+            )
+            return
+
+        self.publish_direct_twist(
+            lx=self.pre_draw_speed,
+            ly=0.0,
+            lz=0.0,
+            az=0.0
+        )
+
+    def handle_draw_line(self):
+        elapsed = self.elapsed_in_state()
+
+        if elapsed < self.draw_time:
+            self.publish_direct_twist(
+                lx=self.draw_forward_bias,
+                ly=self.draw_lateral_speed
+            )
+            return
+
+        self.stop()
+
+        if self.should_finish_after("DRAW_OK"):
+            self.finish_mission()
+            return
+
+        self.set_state("BACK_OFF")
+
+    def handle_back_off(self):
+        elapsed = self.elapsed_in_state()
+
+        if elapsed < self.backoff_time:
+            self.publish_direct_twist(lx=self.backoff_speed)
+            return
+
+        self.stop()
+
+        if self.test_mode == "full":
+            if self.enable_rotate_before_land:
+                self.set_state("ROTATE_RIGHT_90")
+            else:
+                self.set_state("LAND")
+        else:
+            self.finish_mission()
+
     def handle_recover_marker(self):
-        """
-        Hover y espera un momento a que el ArUco reaparezca.
-        No se va directo a SEARCH.
-        """
         self.stop()
 
         data = self.latest_data
@@ -519,6 +712,46 @@ class MissionWhiteboardAruco:
 
         if self.elapsed_in_state() > self.recover_hold_time:
             self.set_state("SEARCH_ARUCO")
+
+    def handle_rotate_right_90(self):
+        if self.current_yaw is not None:
+            if self.rotate_yaw_start is None:
+                self.rotate_yaw_start = self.current_yaw
+                self.rotate_yaw_target = self.rotate_yaw_start - math.pi / 2.0
+
+            yaw_error = self.rotate_yaw_target - self.current_yaw
+            yaw_error = math.atan2(math.sin(yaw_error), math.cos(yaw_error))
+
+            if abs(yaw_error) <= self.rotate_yaw_tolerance:
+                self.stop()
+                self.set_state("LAND")
+                return
+
+            if self.elapsed_in_state() > self.rotate_timeout:
+                self.stop()
+                self.set_state("LAND")
+                return
+
+            self.publish_direct_twist(az=self.rotate_right_speed)
+            return
+
+        if self.elapsed_in_state() < 2.0:
+            self.publish_direct_twist(az=self.rotate_right_speed)
+            return
+
+        self.stop()
+        self.set_state("LAND")
+
+    def handle_land(self):
+        self.stop()
+        rospy.sleep(0.2)
+        self.pub_land.publish(Empty())
+        rospy.sleep(self.post_land_wait)
+        self.finish_mission()
+
+    # =====================================================
+    # Main logic
+    # =====================================================
 
     def control_logic(self):
         if self.finished:
@@ -536,8 +769,18 @@ class MissionWhiteboardAruco:
             self.handle_align_to_marker()
         elif self.state == "APPROACH_BOARD":
             self.handle_approach_board()
+        elif self.state == "PRE_DRAW":
+            self.handle_pre_draw()
+        elif self.state == "DRAW_LINE":
+            self.handle_draw_line()
+        elif self.state == "BACK_OFF":
+            self.handle_back_off()
         elif self.state == "RECOVER_MARKER":
             self.handle_recover_marker()
+        elif self.state == "ROTATE_RIGHT_90":
+            self.handle_rotate_right_90()
+        elif self.state == "LAND":
+            self.handle_land()
         else:
             self.fail_mission(f"unknown_state_{self.state}")
 
