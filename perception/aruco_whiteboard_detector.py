@@ -8,29 +8,12 @@ import numpy as np
 class ArucoWhiteboardDetector:
     """
     Detector del ArUco asociado al pizarrón.
-
-    Salida:
-      - detected
-      - marker_id
-      - corners
-      - center_x, center_y
-      - cx, cy
-      - error_x, error_y
-      - bbox_w, bbox_h
-      - area
-      - target_draw_x, target_draw_y
-
-    Nota:
-    El reglamento menciona un marcador 5x5 con ID 100.
-    Aquí arrancamos con DICT_5X5_250, que es una opción razonable.
-    Antes de competir, validen el diccionario con el marcador real impreso.
     """
 
     def __init__(self):
         self.target_id = 100
-        self.marker_size_m = 0.20  # 20 cm
+        self.marker_size_m = 0.20
 
-        # Compatibilidad OpenCV nuevo / viejo
         if hasattr(cv2.aruco, "getPredefinedDictionary"):
             self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_250)
         else:
@@ -42,7 +25,6 @@ class ArucoWhiteboardDetector:
             self.aruco_params = cv2.aruco.DetectorParameters_create()
 
     def _detect_markers(self, gray):
-        # Compatibilidad OpenCV
         if hasattr(cv2.aruco, "ArucoDetector"):
             detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
             corners, ids, rejected = detector.detectMarkers(gray)
@@ -54,7 +36,7 @@ class ArucoWhiteboardDetector:
             )
         return corners, ids, rejected
 
-    def process_image(self, frame):
+    def process_image(self, frame, show_draw_ref=False):
         h, w = frame.shape[:2]
 
         data = {
@@ -108,9 +90,6 @@ class ArucoWhiteboardDetector:
             bbox_h = y_max - y_min
             area = bbox_w * bbox_h
 
-            # Heurística para objetivo de trazo:
-            # El ArUco está fuera del borde izquierdo del pizarrón y más arriba que el centro del pizarrón.
-            # Entonces, para iniciar el trazo nos movemos "hacia la derecha" y "hacia abajo" en imagen.
             target_draw_x = int(cx + 1.3 * bbox_w)
             target_draw_y = int(cy + 0.9 * bbox_h)
 
@@ -133,9 +112,10 @@ class ArucoWhiteboardDetector:
             cv2.putText(output, f"id={marker_id}", (int(x_min), int(y_min) - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-            cv2.circle(output, (target_draw_x, target_draw_y), 6, (255, 255, 0), -1)
-            cv2.putText(output, "draw_start_ref", (target_draw_x + 8, target_draw_y - 8),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 0), 1)
+            if show_draw_ref:
+                cv2.circle(output, (target_draw_x, target_draw_y), 6, (255, 255, 0), -1)
+                cv2.putText(output, "draw_start_ref", (target_draw_x + 8, target_draw_y - 8),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 0), 1)
 
             cv2.putText(output, f"err_x={int(data['error_x'])}", (20, 60),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)

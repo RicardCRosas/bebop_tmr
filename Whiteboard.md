@@ -1,94 +1,27 @@
-# Misión Whiteboard — Guía de ejecución paso a paso
+# Pruebas de la misión Whiteboard ArUco
 
-## Teclas de emergencia (activas mientras corre la misión)
-| Tecla | Acción |
-|-------|--------|
-| `q` | Aterrizaje normal inmediato |
-| `e` | Reset de emergencia (motores apagados en el aire — **solo si va a chocar**) |
+## Teclas de emergencia
+Mientras corre la misión en la terminal:
 
----
+- `q` = aterrizaje inmediato
+- `e` = emergencia dura (`/bebop/reset`)
 
-## Verificaciones antes de cada prueba
-
-```bash
-# Confirmar que la odometría llega correctamente
-rostopic echo /bebop/odom | head -20
-```
-Debes ver `position.x`, `position.y`, `position.z` cambiando al mover el drone.
-
-```bash
-# Confirmar imagen
-rostopic hz /bebop/image_raw
-```
-Debe mostrar ~30 Hz.
-
-```bash
-# Confirmar que el ArUco es visible
-rosrun bebop_tmr test_aruco_bebop_camera.py
-```
-Abre ventana con la cámara del drone. El ArUco debe aparecer recuadrado en verde.
+> Usar `q` si el dron sigue estable y quieres abortar.
+> Usar `e` solo si hay riesgo real de choque o pérdida de control.
 
 ---
 
-## Flujo de estados
-
-```
-SET_CAMERA
-   │  ajusta tilt de cámara 18°, espera 1.5 s
-   ▼
-SEARCH_ARUCO
-   │  gira az=0.15 buscando ArUco ID=100
-   │  espera 8 frames estables antes de avanzar
-   ▼
-ALIGN_YAW          ← solo az, sin traslación
-   │  corrige orientación visual del drone respecto al pizarrón
-   │  tolera ±0.18 rad — no busca perfección
-   ▼
-ALIGN_CENTER       ← solo ly o lz, UN eje a la vez, sin avanzar
-   │  centra el ArUco en imagen (tolera ±60 px X, ±45 px Y)
-   │  espera 0.6 s estable antes de continuar
-   ▼
-APPROACH_BOARD     ← solo lx cuando está alineado; pausa al corregir deriva
-   │  avanza hasta que area >= approach_area_threshold (≈1 m del pizarrón)
-   │  freno de emergencia si area >= area_abort_threshold (≈0.5 m)
-   │  si pierde ArUco > 1.5 s → SAFE_RETREAT
-   │
-   │  [SAFE_RETREAT si pierde ArUco]
-   │     retrocede 0.40 m con odometría → vuelve a SEARCH_ARUCO
-   ▼
-MOVE_TO_DRAW_START ← odometría pura, sin ArUco
-   │  fase DOWN:  baja 0.15 m  (lz negativo)
-   │  fase RIGHT: mueve 0.28 m a la derecha (ly negativo)
-   ▼
-TOUCH_BOARD        ← open-loop
-   │  lx=0.07 durante 1.0 s para hacer contacto con el pizarrón
-   ▼
-DRAW_LINE          ← open-loop
-   │  lx=0.02 (presión) + ly=-0.14 (trazo) durante 2.0 s
-   ▼
-BACK_OFF           ← odometría
-   │  retrocede 0.55 m reales
-   ▼
-ROTATE_RIGHT_90    ← odometría yaw
-   │  gira -90° con PD sobre /bebop/odom yaw
-   ▼
-DONE → publica "done"
-```
+## Antes de empezar
+Asegúrate de que:
+- el Bebop esté encendido
+- tu laptop esté conectada a la red del dron
+- el workspace ya esté compilado
+- `mission_supervisor.py` tenga timeout de 45 segundos
+- el ArUco esté visible frente a la cámara
 
 ---
 
-## Preparación del entorno
-
-### Terminal 1 — conectar y levantar el Bebop
-```bash
-cd ~
-source /opt/ros/noetic/setup.bash
-source ~/bebop_ws/devel/setup.bash
-roslaunch bebop_driver bebop_node.launch
-```
-Esperar a ver `[bebop_driver] Connected` antes de continuar.
-
-### Terminal 2 — compilar el paquete (solo si hubo cambios de código)
+## Recompilar
 ```bash
 cd ~/catkin_ws
 source /opt/ros/noetic/setup.bash
@@ -98,183 +31,214 @@ source devel/setup.bash
 
 ---
 
-## Pruebas por etapa (`test_mode`)
-
-Siempre despega manualmente primero:
+# PRUEBA 1 — Solo cámara del dron
+## Terminal 1 — levantar cámara del Bebop
 ```bash
-rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
+roslaunch bebop_driver bebop_node.launch
 ```
-Espera ~3 segundos a que el drone se estabilice.
+
+## Terminal 2 — verificar que la cámara publique
+```bash
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
+rostopic list | grep bebop
+rostopic hz /bebop/image_raw
+```
+
+## Terminal 3 — test de detección ArUco
+```bash
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
+rosrun bebop_tmr test_aruco_bebop_camera.py
+```
+
+## Resultado esperado
+- La cámara del dron publica en `/bebop/image_raw`
+- Se abre una ventana
+- El ArUco se detecta
+- Aparecen `id`, `err_x`, `err_y`, `area`
 
 ---
 
-### Etapa 1 — `search_align` (solo búsqueda y alineación)
+# PRUEBA 2 — Misión Whiteboard por etapas
+
+## Terminal 1 — cámara del dron
 ```bash
-cd ~
+cd ~/catkin_ws
 source /opt/ros/noetic/setup.bash
-source ~/catkin_ws/devel/setup.bash
-export ROS_PACKAGE_PATH=$HOME/catkin_ws/src:$HOME/bebop_ws/src:/opt/ros/noetic/share
+source devel/setup.bash
+roslaunch bebop_driver bebop_node.launch
+```
+
+## Terminal 2 — verificar imagen
+```bash
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
+rostopic hz /bebop/image_raw
+```
+
+## Terminal 3 — etapa 1: buscar y alinear
+```bash
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=search_align _show_debug:=true
 ```
 
-**Resultado esperado:**
-- Ajusta cámara
-- Gira buscando el ArUco
-- Corrige yaw (orientación frente al pizarrón)
-- Centra el ArUco en imagen
-- Para y publica "done"
-- **No avanza hacia el pizarrón**
-
-**Si algo falla:**
-- `ArUco no detectado` → revisar iluminación, distancia y diccionario (DICT_5X5_250, ID 100)
-- `gira sin parar` → el ArUco no es visible para la cámara con el tilt actual; ajustar `_cam_tilt`
-- `correcciones muy grandes` → aumentar `_tol_x` y `_tol_y`
+## Resultado esperado
+- Detecta el ArUco
+- Se alinea visualmente
+- No falla
+- Puedes abortar con `q` o `e`
 
 ---
 
-### Etapa 2 — `approach` (se acerca al pizarrón)
+## Terminal 3 — etapa 2: aproximación
 ```bash
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=approach _show_debug:=true
 ```
 
-**Resultado esperado:**
-- Hace todo lo de etapa 1
-- Avanza recto hacia el pizarrón
-- Se detiene a ~1 m (cuando el ArUco ocupa el área objetivo)
-- **No choca**
-- Para y publica "done"
-
-**Si algo falla:**
-- `choca` → reducir `_approach_area_threshold` (ej. 13000) o reducir `_approach_speed`
-- `para demasiado lejos` → aumentar `_approach_area_threshold` (ej. 20000)
-- `va en diagonal` → revisar que `APPROACH_BOARD` no manda lx y ly simultáneamente
-- `pierde ArUco y va a SAFE_RETREAT` → aumentar `_approach_loss_timeout` (ej. 2.5)
-
-**Calibración del umbral de área:**
-Con `show_debug=true` verás el valor de `area=XXXX` en la imagen. Apunta el valor
-cuando el drone esté a la distancia deseada (≈1 m del pizarrón) y úsalo como
-`_approach_area_threshold`.
+## Resultado esperado
+- Detecta
+- Se alinea
+- Se acerca de forma segura
+- No se pega demasiado al pizarrón
 
 ---
 
-### Etapa 3 — `draw_start` (se posiciona en punto de inicio)
+## Terminal 3 — etapa 3: punto de inicio del trazo
 ```bash
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=draw_start _show_debug:=true
 ```
 
-**Resultado esperado:**
-- Hace todo lo de etapa 2
-- Baja 0.15 m (sin buscar el ArUco)
-- Mueve 0.28 m a la derecha
-- Para en la posición de inicio del trazo, abajo y a la derecha del ArUco
-- Publica "done"
-
-**Ajuste de posición:**
-- Si el plumón queda demasiado lejos del pizarrón → aumentar `_draw_right` o reducir `_draw_down`
-- Si tapa el ArUco → reducir `_draw_right`
-- Los valores son en metros; ajustar de 0.05 en 0.05
+## Resultado esperado
+- Ya no apunta solo al centro del ArUco
+- Se mueve al punto estimado para comenzar a pintar
 
 ---
 
-### Etapa 4 — `touch` (hace contacto)
+## Terminal 3 — etapa 4: toque del pizarrón
 ```bash
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=touch _show_debug:=true
 ```
 
-**Resultado esperado:**
-- Hace todo lo anterior
-- Empuja suavemente hacia adelante (lx=0.07) durante 1 s
-- El plumón hace contacto con el pizarrón
-- Para y publica "done"
-
-**Ajuste:**
-- Si el plumón no llega → aumentar `_touch_time` (ej. 1.5)
-- Si choca duro → reducir `_touch_speed` (ej. 0.05) o `_touch_time`
+## Resultado esperado
+- Avanza muy lento
+- Confirma toque usando visión + odometría
+- No empuja demasiado
+- Si pierde el ArUco cerca del pizarrón, retrocede
 
 ---
 
-### Etapa 5 — `draw` (traza la línea)
+## Terminal 3 — etapa 5: dibujar línea
 ```bash
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=draw _show_debug:=true
 ```
 
-**Resultado esperado:**
-- Hace todo lo anterior
-- Se mueve lateralmente a la derecha durante 2 s con presión hacia adelante
-- Se ve la línea en el pizarrón
-- Se aleja del pizarrón
-- Publica "done"
-
-**Ajuste:**
-- Línea muy corta → aumentar `_draw_time` o `_draw_lat_speed` (más negativo)
-- Línea muy larga → reducir `_draw_time`
-- No hace contacto → aumentar `_draw_fwd_bias` (ej. 0.03)
+## Resultado esperado
+- Toca el pizarrón
+- Dibuja línea horizontal
+- Retrocede después
 
 ---
 
-### Etapa 6 — `full` (misión completa con rotación)
+## Terminal 3 — etapa 6: misión completa
 ```bash
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=full _show_debug:=true
 ```
 
-**Resultado esperado:**
-1. Ajusta cámara
-2. Busca ArUco
-3. Corrige yaw
-4. Centra en imagen
-5. Se acerca recto al pizarrón
-6. Se posiciona abajo-derecha del ArUco
-7. Hace contacto
-8. Traza línea horizontal
-9. Retrocede 0.55 m
-10. Gira -90° (a la derecha)
-11. Publica "done"
+## Resultado esperado
+La misión completa debe hacer:
+
+1. ajustar cámara
+2. buscar ArUco
+3. alinearse
+4. aproximarse sin chocar
+5. llegar al punto de inicio del trazo
+6. confirmar toque del pizarrón
+7. dibujar la línea
+8. retroceder
+9. girar 90° a la derecha
+10. aterrizar
 
 ---
 
-## Parar el drone manualmente
-
+# PRUEBA 3 — Ver comandos del dron
+## Terminal extra opcional
 ```bash
-# Aterrizaje normal
-rostopic pub --once /bebop/land std_msgs/Empty "{}"
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
+rostopic echo /bebop/cmd_vel
+```
 
-# Emergencia (apaga motores — solo si va a chocar)
+## Resultado esperado
+- Ver cómo cambian los comandos al mover el ArUco
+- Confirmar si la lógica está alineando, acercando o retrocediendo
+
+---
+
+# PRUEBA 4 — Ver imagen directa del dron
+## Terminal extra opcional
+```bash
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
+rqt_image_view
+```
+
+Luego seleccionar:
+
+```text
+/bebop/image_raw
+```
+
+---
+
+# Orden recomendado para probar ahorita
+1. `test_aruco_bebop_camera.py`
+2. `search_align`
+3. `approach`
+4. `draw_start`
+5. `touch`
+6. `draw`
+7. `full`
+
+---
+
+# Si algo sale mal
+- `q` → aterrizaje inmediato
+- `e` → emergencia dura
+
+Y si necesitas parar el dron manualmente desde otra terminal:
+
+## Aterrizaje inmediato
+```bash
+rostopic pub --once /bebop/land std_msgs/Empty "{}"
+```
+
+## Emergencia dura
+```bash
 rostopic pub --once /bebop/reset std_msgs/Empty "{}"
 ```
-
----
-
-## Parámetros de calibración principales
-
-| Parámetro | Default | Cuándo ajustar |
-|-----------|---------|----------------|
-| `_cam_tilt` | 18.0° | Si no ve el ArUco al buscar |
-| `_approach_area_threshold` | 17000 | Si para muy lejos o muy cerca en approach |
-| `_area_abort_threshold` | 32000 | Si el freno de emergencia actúa muy pronto |
-| `_approach_speed` | 0.10 | Si avanza muy rápido/lento |
-| `_draw_down` | 0.15 m | Si el punto de inicio del trazo queda muy alto/bajo |
-| `_draw_right` | 0.28 m | Si el punto de inicio queda muy cerca/lejos del ArUco |
-| `_touch_time` | 1.0 s | Si no hace contacto o choca |
-| `_draw_time` | 2.0 s | Si la línea es muy corta/larga |
-| `_backoff_distance` | 0.55 m | Distancia de separación tras el trazo |
-
----
-
-## Verificar odometría en vivo durante la misión
-
-```bash
-# En otra terminal mientras corre la misión:
-rostopic echo /bebop/odom/pose/pose
-```
-Verás las coordenadas X, Y, Z actualizándose. Útil para verificar que
-los movimientos odométricos funcionan correctamente.
-
----
-
-## Notas importantes
-
-- **La odometría del Bebop (`/bebop/odom`) da posición XY real** — confirmado con pruebas reales (notas 18 feb y `mission_square_1.py`).
-- **El ArUco solo se usa como referencia de alineación inicial.** Los estados MOVE_TO_DRAW_START, BACK_OFF y ROTATE_RIGHT_90 no lo necesitan.
-- **APPROACH nunca manda lx y ly/lz al mismo tiempo.** Si hay deriva, para, corrige, y reanuda.
-- **`already_close` es un flag permanente** — si alguna vez el área supera el umbral, el drone no volverá a intentar acercarse aunque re-detecte el ArUco desde lejos.
-- Diccionario: `DICT_5X5_250`, ID `100`.
