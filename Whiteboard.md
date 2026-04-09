@@ -16,8 +16,9 @@ Asegúrate de que:
 - el Bebop esté encendido
 - tu laptop esté conectada a la red del dron
 - el workspace ya esté compilado
-- `mission_supervisor.py` tenga timeout de 45 segundos
-- el ArUco esté visible frente a la cámara
+- el ArUco esté visible frente a la cámara (ID 100)
+- la misión tiene un timeout interno de 75 segundos (ajustado por velocidad lenta)
+- el dron aterrizará automáticamente si se acerca demasiado al pizarrón (Safe Area)
 
 ---
 
@@ -110,8 +111,8 @@ rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=approach _show_debug:=t
 ## Resultado esperado
 - Detecta
 - Se alinea
-- Se acerca de forma segura
-- No se pega demasiado al pizarrón
+- se acerca de forma segura y muy lenta
+- si se pega demasiado al pizarrón (Safe Area), aterriza inmediatamente por seguridad
 
 ---
 
@@ -140,8 +141,8 @@ rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=touch _show_debug:=true
 ## Resultado esperado
 - Avanza muy lento
 - Confirma toque usando visión + odometría
-- No empuja demasiado
-- Si pierde el ArUco cerca del pizarrón, retrocede
+- si el área crece demasiado (riesgo de choque), aterriza inmediatamente
+- si pierde el ArUco cerca del pizarrón, retrocede o aterriza según la fase de seguridad
 
 ---
 
