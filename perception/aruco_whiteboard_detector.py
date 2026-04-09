@@ -3,6 +3,7 @@
 
 import cv2
 import numpy as np
+import math
 
 
 class ArucoWhiteboardDetector:
@@ -49,6 +50,7 @@ class ArucoWhiteboardDetector:
             "cy": None,
             "error_x": None,
             "error_y": None,
+            "marker_yaw": 0.0,
             "bbox_w": 0.0,
             "bbox_h": 0.0,
             "area": 0.0,
@@ -93,6 +95,31 @@ class ArucoWhiteboardDetector:
             target_draw_x = int(cx + 1.3 * bbox_w)
             target_draw_y = int(cy + 0.9 * bbox_h)
 
+            # --- Estimate Yaw Angle ---
+            focal_length = w * 0.8
+            camera_matrix = np.array([
+                [focal_length, 0, w / 2],
+                [0, focal_length, h / 2],
+                [0, 0, 1]
+            ], dtype=np.float32)
+            dist_coeffs = np.zeros((4, 1))
+
+            s = self.marker_size_m / 2.0
+            obj_pts = np.array([
+                [-s, -s, 0],
+                [ s, -s, 0],
+                [ s,  s, 0],
+                [-s,  s, 0]
+            ], dtype=np.float32)
+            
+            success, rvec, tvec = cv2.solvePnP(obj_pts, pts, camera_matrix, dist_coeffs)
+            if success:
+                rmat, _ = cv2.Rodrigues(rvec)
+                normal_c = rmat[:, 2]
+                marker_yaw = math.atan2(normal_c[0], normal_c[2])
+            else:
+                marker_yaw = 0.0
+
             data["detected"] = True
             data["marker_id"] = int(marker_id)
             data["corners"] = pts
@@ -100,6 +127,7 @@ class ArucoWhiteboardDetector:
             data["cy"] = cy
             data["error_x"] = cx - data["center_x"]
             data["error_y"] = cy - data["center_y"]
+            data["marker_yaw"] = marker_yaw
             data["bbox_w"] = bbox_w
             data["bbox_h"] = bbox_h
             data["area"] = area
@@ -122,6 +150,8 @@ class ArucoWhiteboardDetector:
             cv2.putText(output, f"err_y={int(data['error_y'])}", (20, 90),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
             cv2.putText(output, f"area={int(area)}", (20, 120),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+            cv2.putText(output, f"yaw={marker_yaw:.2f}", (20, 150),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
             return output, data

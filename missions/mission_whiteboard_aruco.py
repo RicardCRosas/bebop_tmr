@@ -425,31 +425,38 @@ class MissionWhiteboardAruco:
 
         err_x = data["error_x"]
         err_y = data["error_y"]
+        marker_yaw = data.get("marker_yaw", 0.0)
 
         aligned_x = abs(err_x) <= self.center_tolerance_x
         aligned_y = abs(err_y) <= self.center_tolerance_y
+        aligned_yaw = abs(marker_yaw) <= 0.15
 
-        if not aligned_x:
-            if err_x < 0:
-                self.publish_direct_twist(ly=self.align_lateral_speed)
-            else:
-                self.publish_direct_twist(ly=-self.align_lateral_speed)
+        if aligned_x and aligned_y and aligned_yaw:
+            self.stop()
+
+            if self.should_finish_after("ALIGN_OK"):
+                self.finish_mission()
+                return
+
+            self.set_state("APPROACH_BOARD")
             return
+
+        ly = 0.0
+        lz = 0.0
+        az = 0.0
 
         if not aligned_y:
-            if err_y < 0:
-                self.publish_direct_twist(lz=self.align_vertical_speed)
-            else:
-                self.publish_direct_twist(lz=-self.align_vertical_speed)
-            return
+            lz = self.align_vertical_speed if err_y < 0 else -self.align_vertical_speed
 
-        self.stop()
+        if not aligned_yaw:
+            # Correccion de angulo con desplazamiento lateral (strafe)
+            ly = -self.align_lateral_speed if marker_yaw > 0 else self.align_lateral_speed
 
-        if self.should_finish_after("ALIGN_OK"):
-            self.finish_mission()
-            return
+        if not aligned_x:
+            # Mantener centrado girando la camara (yaw)
+            az = self.search_yaw_speed if err_x < 0 else -self.search_yaw_speed
 
-        self.set_state("APPROACH_BOARD")
+        self.publish_direct_twist(ly=ly, lz=lz, az=az)
 
     def handle_approach_board(self):
         data = self.latest_data
@@ -461,6 +468,7 @@ class MissionWhiteboardAruco:
 
         err_x = data["error_x"]
         err_y = data["error_y"]
+        marker_yaw = data.get("marker_yaw", 0.0)
         area = data["area"]
 
         if area >= self.max_safe_area:
@@ -469,18 +477,29 @@ class MissionWhiteboardAruco:
             self.set_state("MOVE_TO_DRAW_START")
             return
 
-        if abs(err_x) > self.center_tolerance_x:
-            if err_x < 0:
-                self.publish_direct_twist(ly=self.align_lateral_speed * 0.75)
-            else:
-                self.publish_direct_twist(ly=-self.align_lateral_speed * 0.75)
-            return
+        aligned_x = abs(err_x) <= self.center_tolerance_x
+        aligned_y = abs(err_y) <= self.center_tolerance_y
+        aligned_yaw = abs(marker_yaw) <= 0.20
 
-        if abs(err_y) > self.center_tolerance_y:
-            if err_y < 0:
-                self.publish_direct_twist(lz=self.align_vertical_speed * 0.75)
-            else:
-                self.publish_direct_twist(lz=-self.align_vertical_speed * 0.75)
+        if not (aligned_x and aligned_y and aligned_yaw):
+            ly = 0.0
+            lz = 0.0
+            az = 0.0
+            lx = 0.0
+            
+            if not aligned_y:
+                lz = self.align_vertical_speed * 0.75 if err_y < 0 else -self.align_vertical_speed * 0.75
+            
+            if not aligned_yaw:
+                ly = -self.align_lateral_speed * 0.75 if marker_yaw > 0 else self.align_lateral_speed * 0.75
+
+            if not aligned_x:
+                az = self.search_yaw_speed * 0.75 if err_x < 0 else -self.search_yaw_speed * 0.75
+                
+            if area < self.approach_area_near:
+                lx = self.approach_speed_far * 0.5
+                
+            self.publish_direct_twist(lx=lx, ly=ly, lz=lz, az=az)
             return
 
         if area < self.approach_area_safe:
@@ -520,23 +539,30 @@ class MissionWhiteboardAruco:
 
         err_x = tx - img_cx
         err_y = ty - img_cy
+        marker_yaw = data.get("marker_yaw", 0.0)
         area = data["area"]
 
         aligned_x = abs(err_x) <= self.draw_target_tolerance_x
         aligned_y = abs(err_y) <= self.draw_target_tolerance_y
+        aligned_yaw = abs(marker_yaw) <= 0.15
 
-        if not aligned_x:
-            if err_x < 0:
-                self.publish_direct_twist(ly=self.align_lateral_speed * 0.75)
-            else:
-                self.publish_direct_twist(ly=-self.align_lateral_speed * 0.75)
-            return
-
-        if not aligned_y:
-            if err_y < 0:
-                self.publish_direct_twist(lz=self.align_vertical_speed * 0.75)
-            else:
-                self.publish_direct_twist(lz=-self.align_vertical_speed * 0.75)
+        if not (aligned_x and aligned_y and aligned_yaw):
+            ly = 0.0
+            lz = 0.0
+            az = 0.0
+            
+            if not aligned_y:
+                lz = self.align_vertical_speed * 0.75 if err_y < 0 else -self.align_vertical_speed * 0.75
+                
+            if not aligned_x:
+                # Target lateral centrado por strafing
+                ly = self.align_lateral_speed * 0.75 if err_x < 0 else -self.align_lateral_speed * 0.75
+                
+            if not aligned_yaw:
+                # Mantener perpendicularidad usando yaw
+                az = -self.search_yaw_speed * 0.5 if marker_yaw > 0 else self.search_yaw_speed * 0.5
+                
+            self.publish_direct_twist(ly=ly, lz=lz, az=az)
             return
 
         if area < self.touch_area_threshold:
