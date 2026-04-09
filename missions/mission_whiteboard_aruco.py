@@ -144,32 +144,32 @@ class MissionWhiteboardAruco:
         self.touch_confirm_area = rospy.get_param("~touch_confirm_area", 26000)
         self.max_safe_area = rospy.get_param("~max_safe_area", 32000)
 
-        # Speeds
-        self.search_yaw_speed = rospy.get_param("~search_yaw_speed", 0.18)
-        self.align_lateral_speed = rospy.get_param("~align_lateral_speed", 0.14)
-        self.align_vertical_speed = rospy.get_param("~align_vertical_speed", 0.12)
+        # Speeds - Velocidades mas bajas por seguridad
+        self.search_yaw_speed = rospy.get_param("~search_yaw_speed", 0.10)
+        self.align_lateral_speed = rospy.get_param("~align_lateral_speed", 0.08)
+        self.align_vertical_speed = rospy.get_param("~align_vertical_speed", 0.08)
 
-        self.approach_speed_far = rospy.get_param("~approach_speed_far", 0.10)
-        self.approach_speed_near = rospy.get_param("~approach_speed_near", 0.055)
+        self.approach_speed_far = rospy.get_param("~approach_speed_far", 0.06)
+        self.approach_speed_near = rospy.get_param("~approach_speed_near", 0.035)
 
-        self.touch_forward_speed = rospy.get_param("~touch_forward_speed", 0.04)
-        self.touch_forward_time_max = rospy.get_param("~touch_forward_time_max", 1.3)
+        self.touch_forward_speed = rospy.get_param("~touch_forward_speed", 0.025)
+        self.touch_forward_time_max = rospy.get_param("~touch_forward_time_max", 2.5)
 
-        self.draw_forward_bias = rospy.get_param("~draw_forward_bias", 0.02)
-        self.draw_lateral_speed = rospy.get_param("~draw_lateral_speed", -0.12)
-        self.draw_time = rospy.get_param("~draw_time", 1.7)
+        self.draw_forward_bias = rospy.get_param("~draw_forward_bias", 0.015)
+        self.draw_lateral_speed = rospy.get_param("~draw_lateral_speed", -0.06)
+        self.draw_time = rospy.get_param("~draw_time", 3.4)
 
-        self.backoff_speed = rospy.get_param("~backoff_speed", -0.10)
-        self.backoff_time = rospy.get_param("~backoff_time", 1.4)
+        self.backoff_speed = rospy.get_param("~backoff_speed", -0.06)
+        self.backoff_time = rospy.get_param("~backoff_time", 2.3)
 
-        self.rotate_right_speed = rospy.get_param("~rotate_right_speed", -0.22)
-        self.rotate_timeout = rospy.get_param("~rotate_timeout", 5.0)
+        self.rotate_right_speed = rospy.get_param("~rotate_right_speed", -0.12)
+        self.rotate_timeout = rospy.get_param("~rotate_timeout", 8.0)
         self.rotate_yaw_tolerance = rospy.get_param("~rotate_yaw_tolerance", 0.10)
 
         # Detection / safety times
         self.detection_timeout = rospy.get_param("~detection_timeout", 0.5)
         self.marker_lost_timeout = rospy.get_param("~marker_lost_timeout", 0.7)
-        self.max_mission_time = rospy.get_param("~max_mission_time", 45.0)
+        self.max_mission_time = rospy.get_param("~max_mission_time", 75.0)
         self.post_land_wait = rospy.get_param("~post_land_wait", 2.0)
 
         # Odom-based touch confirmation
@@ -474,7 +474,7 @@ class MissionWhiteboardAruco:
         if area >= self.max_safe_area:
             rospy.logwarn("Area demasiado alta; frenando para evitar choque.")
             self.stop()
-            self.set_state("MOVE_TO_DRAW_START")
+            self.set_state("TOUCH_BOARD")
             return
 
         aligned_x = abs(err_x) <= self.center_tolerance_x
@@ -546,6 +546,12 @@ class MissionWhiteboardAruco:
         aligned_y = abs(err_y) <= self.draw_target_tolerance_y
         aligned_yaw = abs(marker_yaw) <= 0.15
 
+        if area >= self.max_safe_area:
+            rospy.logwarn("Peligro de choque (inercia) en MOVE_TO_DRAW_START. Abortando alineacion.")
+            self.stop()
+            self.set_state("TOUCH_BOARD")
+            return
+
         if not (aligned_x and aligned_y and aligned_yaw):
             ly = 0.0
             lz = 0.0
@@ -590,6 +596,18 @@ class MissionWhiteboardAruco:
         tx = data["target_draw_x"]
         ty = data["target_draw_y"]
         elapsed = self.elapsed_in_state()
+
+        if area >= self.max_safe_area:
+            rospy.logwarn("SAFE AREA SUPERADA. Parada de emergencia. Deteniendo avance y confirmando toque.")
+            self.board_contact_confirmed = True
+            self.stop()
+
+            if self.should_finish_after("TOUCH_OK"):
+                self.finish_mission()
+                return
+
+            self.set_state("DRAW_LINE")
+            return
 
         # Alineacion final al punto de dibujo
         err_x = tx - data["center_x"] if tx is not None else 0
