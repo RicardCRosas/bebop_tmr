@@ -30,6 +30,24 @@ catkin_make
 source devel/setup.bash
 ```
 
+## Garantía de Ejecución (Reliability)
+Si el código no corre o ROS no encuentra los paquetes, ejecuta esto una sola vez:
+
+### 1. Permisos de archivos
+```bash
+chmod +x ~/catkin_ws/src/bebop_tmr/missions/*.py
+chmod +x ~/catkin_ws/src/bebop_tmr/perception/*.py
+chmod +x ~/catkin_ws/src/bebop_tmr/bebop_core/*.py
+```
+
+### 2. Compilación y Source
+Asegúrate de estar en la raíz de tu workspace:
+```bash
+cd ~/catkin_ws
+catkin_make
+source devel/setup.bash
+```
+
 ---
 
 # PRUEBA 1 — Solo cámara del dron
@@ -38,7 +56,7 @@ source devel/setup.bash
 cd ~/catkin_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
-roslaunch bebop_driver bebop_node.launch
+roslaunch bebop_tmr bebop_node.launch
 ```
 
 ## Terminal 2 — verificar que la cámara publique
@@ -73,7 +91,7 @@ rosrun bebop_tmr test_aruco_bebop_camera.py
 cd ~/catkin_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
-roslaunch bebop_driver bebop_node.launch
+roslaunch bebop_tmr bebop_node.launch
 ```
 
 ## Terminal 2 — verificar imagen
@@ -85,11 +103,23 @@ rostopic hz /bebop/image_raw
 ```
 
 ## Terminal 3 — etapa 1: buscar y alinear
+
+### 1. Despegar
 ```bash
 cd ~/catkin_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
+rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
+```
+
+### 2. Ejecutar etapa
+```bash
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=search_align _show_debug:=true
+```
+
+### 3. Aterrizar
+```bash
+rostopic pub --once /bebop/land std_msgs/Empty "{}"
 ```
 
 ## Resultado esperado
@@ -101,11 +131,23 @@ rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=search_align _show_debu
 ---
 
 ## Terminal 3 — etapa 2: aproximación
+
+### 1. Despegar
 ```bash
 cd ~/catkin_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
+rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
+```
+
+### 2. Ejecutar etapa
+```bash
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=approach _show_debug:=true
+```
+
+### 3. Aterrizar
+```bash
+rostopic pub --once /bebop/land std_msgs/Empty "{}"
 ```
 
 ## Resultado esperado
@@ -117,11 +159,23 @@ rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=approach _show_debug:=t
 ---
 
 ## Terminal 3 — etapa 3: punto de inicio del trazo
+
+### 1. Despegar
 ```bash
 cd ~/catkin_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
+rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
+```
+
+### 2. Ejecutar etapa
+```bash
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=draw_start _show_debug:=true
+```
+
+### 3. Aterrizar
+```bash
+rostopic pub --once /bebop/land std_msgs/Empty "{}"
 ```
 
 ## Resultado esperado
@@ -131,11 +185,23 @@ rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=draw_start _show_debug:
 ---
 
 ## Terminal 3 — etapa 4: toque del pizarrón
+
+### 1. Despegar
 ```bash
 cd ~/catkin_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
+rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
+```
+
+### 2. Ejecutar etapa
+```bash
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=touch _show_debug:=true
+```
+
+### 3. Aterrizar
+```bash
+rostopic pub --once /bebop/land std_msgs/Empty "{}"
 ```
 
 ## Resultado esperado
@@ -147,11 +213,23 @@ rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=touch _show_debug:=true
 ---
 
 ## Terminal 3 — etapa 5: dibujar línea
+
+### 1. Despegar
 ```bash
 cd ~/catkin_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
+rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
+```
+
+### 2. Ejecutar etapa
+```bash
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=draw _show_debug:=true
+```
+
+### 3. Aterrizar
+```bash
+rostopic pub --once /bebop/land std_msgs/Empty "{}"
 ```
 
 ## Resultado esperado
@@ -162,11 +240,23 @@ rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=draw _show_debug:=true
 ---
 
 ## Terminal 3 — etapa 6: misión completa
+
+### 1. Despegar
 ```bash
 cd ~/catkin_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
+rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
+```
+
+### 2. Ejecutar etapa
+```bash
 rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=full _show_debug:=true
+```
+
+### 3. Aterrizar
+```bash
+rostopic pub --once /bebop/land std_msgs/Empty "{}"
 ```
 
 ## Resultado esperado
@@ -225,6 +315,17 @@ Luego seleccionar:
 5. `touch`
 6. `draw`
 7. `full`
+
+---
+
+# Troubleshooting
+## Error: `is neither a launch file in package [bebop_driver]`
+Si ves este error, es porque estás usando `roslaunch bebop_driver`. Usa siempre `roslaunch bebop_tmr bebop_node.launch` ya que el archivo está en tu propio paquete y configurado específicamente para este proyecto.
+
+## El dron no despega o no se conecta
+- Verifica que estés conectado al WiFi del Bebop (Bebop2-XXXX).
+- Verifica que el botón de emergencia del Bebop (atrás) no esté parpadeando en rojo. Si parpadea, presiónalo una vez para resetear.
+- Si `roslaunch` falla con "ResourceNotFound", asegúrate de haber corrido `source devel/setup.bash` en esa terminal.
 
 ---
 
