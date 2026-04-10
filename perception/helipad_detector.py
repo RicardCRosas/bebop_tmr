@@ -5,6 +5,8 @@ import os
 from ultralytics import YOLO
 import cv2
 import numpy as np
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(current_dir, 'models', 'helipad_best.pt')
@@ -19,13 +21,15 @@ class BebopCameraProcessor:
         self.center = (320, 240)
 
     def detect_with_yolo(self, image):
-        results = self.model.predict(source=image, conf=0.5, verbose=False)
+        # 🔥 CAMBIO: más eficiente que .predict()
+        results = self.model(image, conf=0.5, verbose=False)
 
         annotated = results[0].plot()
 
         best_conf = 0
         best_box = None
         cx, cy = None, None
+        area = 0
 
         if results[0].boxes is not None:
             xyxy = results[0].boxes.xyxy.cpu().numpy()
@@ -44,6 +48,8 @@ class BebopCameraProcessor:
             cx = (x1 + x2) // 2
             cy = (y1 + y2) // 2
 
+            area = (x2 - x1) * (y2 - y1)
+
             cv2.circle(annotated, (cx, cy), 6, (0, 0, 255), -1)
             detected = True
         else:
@@ -51,20 +57,22 @@ class BebopCameraProcessor:
 
         cv2.circle(annotated, self.center, 5, (255, 0, 0), -1)
 
-        return annotated, detected, cx, cy
+        return annotated, detected, cx, cy, area
 
     def process_image(self, frame):
         h, w = frame.shape[:2]
         self.center = (w // 2, h // 2)
 
-        annotated, detected, cx, cy = self.detect_with_yolo(frame)
+        annotated, detected, cx, cy, area = self.detect_with_yolo(frame)
 
+        # 🔥 CAMBIO: protección contra None
         data = {
             "detected": detected,
-            "cx": cx,
-            "cy": cy,
+            "cx": cx if cx is not None else 0,
+            "cy": cy if cy is not None else 0,
             "center_x": self.center[0],
-            "center_y": self.center[1]
+            "center_y": self.center[1],
+            "area": area
         }
 
         return annotated, data
@@ -75,8 +83,6 @@ class BebopCameraProcessor:
 # =====================================================
 
 if __name__ == "__main__":
-    from sensor_msgs.msg import Image
-    from cv_bridge import CvBridge
 
     rospy.init_node("helipad_detector_node")
 
@@ -90,7 +96,6 @@ if __name__ == "__main__":
             rospy.logerr(f"CvBridge error: {e}")
             return
 
-        # 🔥 optimización (clave ahora que quitaste el filtro)
         frame = cv2.resize(frame, (640, 360))
 
         processed_image, data = detector.process_image(frame)

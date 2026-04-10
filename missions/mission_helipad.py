@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# mission_windows.py
 
 import rospy
 from sensor_msgs.msg import Image
@@ -17,17 +16,16 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, '..'))
 sys.path.append(project_root)
 
-
 from control.bebop_teleop_controller import BebopMovements
-from perception.square_detector import BebopCameraProcessor
+from perception.helipad_detector import BebopCameraProcessor
 
 # =====================================================
 # MISSION CLASS
 # =====================================================
-class MissionWindows:
+class MissionHelipad:
 
     def __init__(self):
-        rospy.init_node('mission_windows')
+        rospy.init_node('mission_helipad')
 
         # ========================
         # Publishers
@@ -70,32 +68,31 @@ class MissionWindows:
         self.last_detection_time = rospy.Time.now()
 
         self.finished = False
-        self.center_tolerance = 25
-        self.vertical_tolerance = 25
-        self.forward_counter = 0
-        self.aligned_x_counter = 0
+        self.center_tolerance = 30
+        self.vertical_tolerance = 30
+        self.camera_angle = 0
+        self.search_complete = False
+        self.aligned_time = None
+        self.required_stable_time = 1.5  # segundos (ajustable)
 
         self.debug_image = None
 
-        rospy.loginfo("Mission Windows initialized")
+        # Control de cámara (solo una vez)
+        self.camera_initialized = False
+
+        # Umbral de aterrizaje por tamaño
+        self.landing_area_threshold = 30000  # 🔥 AJUSTABLE
+
+        rospy.loginfo("Mission Helipad initialized")
 
     # =====================================================
-    # IMAGE CALLBACK (SIN PROCESAMIENTO)
+    # IMAGE CALLBACK
     # =====================================================
     def image_callback(self, msg):
         if self.finished:
             return
         self.latest_image_msg = msg
 
-    def alv(self, impulsos):
-        print('\n alv...')
-        for i in range (0, impulsos):
-            self.movements.forward1("automatic")
-            self.movements.forward1("automatic")
-            self.movements.up1("automatic")
-            rospy.sleep(0.75)
-            return
-        
     # =====================================================
     # PROCESS IMAGE
     # =====================================================
@@ -110,28 +107,14 @@ class MissionWindows:
             rospy.logerr(f"CvBridge error: {e}")
             return
 
-        # Reducir resolución
         frame = cv2.resize(frame, (640, 360))
 
-        # =========================
-        # MEDIR DELAY DE CÁMARA
-        # =========================
-        msg_time = self.latest_image_msg.header.stamp.to_sec()
-        now_time = rospy.Time.now().to_sec()
-        camera_delay = now_time - msg_time
-
-        # =========================
-        # MEDIR INFERENCIA
-        # =========================
         start_time = rospy.Time.now()
-        processed_image, data, _ = self.detector.process_image(frame)
+        processed_image, data = self.detector.process_image(frame)
         end_time = rospy.Time.now()
 
         inference_time = (end_time - start_time).to_sec()
 
-        # =========================
-        # DIBUJAR INFO
-        # =========================
         cv2.putText(processed_image,
                     f"Inference: {inference_time*1000:.1f} ms",
                     (20, 30),
@@ -140,110 +123,135 @@ class MissionWindows:
                     (0, 255, 0),
                     2)
 
-        cv2.putText(processed_image,
-                    f"Delay: {camera_delay*1000:.1f} ms",
-                    (20, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (255, 255, 0),
-                    2)
-
         self.debug_image = processed_image
         self.latest_data = data
-        self.last_detection_time = rospy.Time.now()
 
+        if data["detected"]:
+            self.last_detection_time = rospy.Time.now()
+ 
     # =====================================================
     # CONTROL LOGIC
     # =====================================================
     def control_logic(self):
-        token = 0
+
+        # Inicializar cámara una sola vez
+        if not self.camera_initialized:
+            self.camera_angle = 0
+            self.movements.camera_tilt(self.camera_angle)
+            rospy.sleep(1.5)
+            self.camera_initialized = True
+            return
 
         if self.latest_data is None:
             return
 
         data = self.latest_data
 
-        # 🔥 PRIMERO verificar detección
-        if not data.get("detected", False):
-            rospy.loginfo("Searching window...")
-            rospy.sleep(1.0)  # 🔥 evitar spamear el log
+        # ========================
+        # 🔍 FASE 1: BÚSQUEDA
+        # ========================
+        if not data.get("detected", False) and not self.search_complete:
+
+            rospy.loginfo(f"Searching... Camera angle: {self.camera_angle}")
+
+            # Avanza lentamente mientras busca
+            self.movements.forward("automatic")
+
+            # Cambiar ángulo gradualmente
+            if self.camera_angle > -90:
+                self.camera_angle -= 30
+                self.movements.camera_tilt(self.camera_angle)
+                rospy.sleep(1.0)
+            else:
+                rospy.loginfo("Reached downward view → assuming above helipad")
+                self.search_complete = True
+
             return
-        
+
+        # ========================
+        # 🧠 FASE 2: CONTROL (YA ABAJO)
+        # ========================
+
         cx = data["cx"]
         cy = data["cy"]
         center_x = data["center_x"]
         center_y = data["center_y"]
 
-        center_y = center_y - 25  # 🔥 ajustar centro vertical para compensar cámara inclinada
-
         error_x = cx - center_x
         error_y = cy - center_y
 
-        aligned_x = abs(error_x) < self.center_tolerance
+        if self.camera_angle != 0:
+            extra_tol = 90 / abs(self.camera_angle)
+        else:
+            extra_tol = 0
+
+        aligned_x = abs(error_x) < (self.center_tolerance + extra_tol)
         aligned_y = abs(error_y) < self.vertical_tolerance
 
         # ========================
-        # CONTROL SECUENCIAL
+        # CONTROL EN X
         # ========================
-
-        # 1️⃣ Alinear en X
-        if (not aligned_x):
+        if not aligned_x:
             if error_x < 0:
                 rospy.loginfo("Adjusting LEFT")
                 self.movements.left("automatic")
-                self.aligned_x_counter += 1
             else:
                 rospy.loginfo("Adjusting RIGHT")
                 self.movements.right("automatic")
-                self.aligned_x_counter += 1            
             return
-        
-        if (not aligned_y):
+
+        # ========================
+        # CONTROL EN Y
+        # ========================
+        if not aligned_y:
             if error_y < 0:
-                rospy.loginfo("Adjusting down")
-                self.movements.down1("automatic")
+                rospy.loginfo("Adjusting FRONT")
+                self.movements.forward("automatic")
             else:
-                rospy.loginfo("Adjusting up")
-                self.movements.up1("automatic")
+                rospy.loginfo("Adjusting BACK")
+                self.movements.backwards("automatic")
+            return
 
-        if aligned_x:
-            token = 1
+        # ========================
+        # DESCENSO + ATERRIZAJE
+        # ========================
 
-            # 3️⃣ Avanzar
-
-        if token == 1:
-            rospy.loginfo("Centered → FORWARD")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 1")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 2")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 3")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 4")
-            #rospy.sleep(0.5)
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 5")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 6")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 7")
-            self.movements.forward1("automatic")
-            rospy.loginfo("Window passed!")
-            self.finish_mission()
+        if aligned_x and aligned_y and not self.search_complete:
+            self.camera_angle -= 30
+            self.movements.camera_tilt(self.camera_angle)
+            rospy.sleep(1.0)
 
 
-        '''  4️⃣ Condición de éxito
-        time_since_last_detection = (rospy.Time.now() - self.last_detection_time).to_sec()
+        area = data.get("area", 0)
 
-        if time_since_last_detection > 5 :'''
-            
+        rospy.loginfo(f"Centered | Area: {area}")
+
+        current_time = rospy.Time.now().to_sec()
+
+        # ========================
+        # VERIFICAR ESTABILIDAD
+        # ========================
+        if aligned_x and aligned_y:
+            if self.aligned_time is None:
+                self.aligned_time = current_time
+            elif (current_time - self.aligned_time) >= self.required_stable_time:
+                # 🔥 SOLO aquí baja
+                if area < self.landing_area_threshold:
+                    rospy.loginfo("Stable → Descending...")
+                    self.movements.down("automatic")
+                else:
+                    rospy.loginfo("Landing condition met")
+                    self.finish_mission()
+        else:
+            # Se perdió alineación → reiniciar contador
+            self.aligned_time = None
 
     # =====================================================
     # FINISH MISSION
     # =====================================================
     def finish_mission(self):
-        self.movements.landing("automatic")
+        rospy.sleep(10)
+        self.movements.f_landing("automatic")
         self.status_pub.publish("done")
         self.finished = True
         rospy.loginfo("Mission completed")
@@ -272,5 +280,5 @@ class MissionWindows:
 # MAIN
 # =====================================================
 if __name__ == "__main__":
-    mission = MissionWindows()
+    mission = MissionHelipad()
     mission.run()
