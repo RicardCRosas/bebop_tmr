@@ -161,6 +161,52 @@ class BebopMovements:
         rospy.sleep(sleep)
         self.reset_twist()
 
+    def forward1(self, mode_flag, speed=1, duration=2.0):
+        if mode_flag != 'automatic' or rospy.is_shutdown():
+            return
+        
+        self.twist.linear.x = speed
+        self.pub_cmd_vel.publish(self.twist)
+        rospy.sleep(duration)
+        self.pub_cmd_vel.publish(self.twist)
+        rospy.sleep(sleep)      
+        self.reset_twist()
+
+    def up1(self, mode_flag, speed=1, duration=2.0):
+        if mode_flag != 'automatic' or rospy.is_shutdown():
+            return
+        
+        self.twist.linear.z = speed
+        self.pub_cmd_vel.publish(self.twist)
+        rospy.sleep(duration)
+        self.pub_cmd_vel.publish(self.twist)
+        rospy.sleep(sleep)      
+        self.reset_twist()
+
+    def down1(self, mode_flag, speed=0.25, duration=0.5):
+        if mode_flag != 'automatic' or rospy.is_shutdown():
+            return
+        self.twist.linear.z = -speed
+        self.pub_cmd_vel.publish(self.twist)
+        rospy.sleep(duration)
+        self.pub_cmd_vel.publish(self.twist)
+        rospy.sleep(sleep)      
+        self.reset_twist()
+
+
+    def f_landing(self, mode_flag):
+        if mode_flag not in ['automatic', 'teleop'] or rospy.is_shutdown():
+            print('\n Invalid state')
+            return
+        self.reset_twist() # Detiene movimiento antes de aterrizar
+        print('\n Landing...')
+        self.pub_cmd_vel.publish(self.twist)
+        # Publica mensaje Empty para iniciar aterrizaje
+        self.pub_land.publish(Empty())
+        rospy.sleep(sleep)
+        print('\n Land done')
+        self.reset_twist()
+
     def left(self, mode_flag):
         if mode_flag != 'automatic' or rospy.is_shutdown():
             print('\n Movement interrupted')
