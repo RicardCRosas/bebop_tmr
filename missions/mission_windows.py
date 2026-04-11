@@ -229,6 +229,12 @@ class MissionWindows:
             self.movements.forward1("automatic")
             rospy.loginfo("forward 7")
             self.movements.forward1("automatic")
+            rospy.loginfo("forward 8")
+            self.movements.forward1("automatic")
+            rospy.loginfo("forward 9")
+            self.movements.forward1("automatic")
+            rospy.loginfo("forward 10")
+            self.movements.forward1("automatic")
             rospy.loginfo("Window passed!")
             self.finish_mission()
 
