@@ -1,0 +1,451 @@
+ 
+ 
+  1 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Torneo Mexicano de Robótica® 2026 
+ 
+Categoría: Drones Autónomos  
+ 
+  Reglamento  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+  2 
+ Contenido  
+1 Introducción  3 
+2 Reglas de Seguridad  4 
+3 Sobre los Vehículos (Drones)  5 
+3.1 Sobre el hardware  5 
+3.2 Acerca del Software  6 
+4 Reglas  6 
+4.1 Elemento que NO se realizará del IMAV 2025  7 
+4.2 Preparación e Inicio de las Misiones  7 
+5 Misiones  7 
+6 Sistema de Puntaje  13 
+7 Contacto  13 
+8 Créditos  13 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  3 
+  
+ 1  Introducción  
+ 
+El Torneo Mexicano de Robótica (TMR) es la competencia de robótica más importante de México que 
+año con año reúne a estudiantes, profesores e investigadores. El objetivo principal es incentivar e 
+impulsar la investigación y desarrollo de la robótica en Méx ico con miras a lograr un desarrollo integral 
+a nivel internacional.  Para lo anterior, el TMR incluye diferentes categorías de competición donde los 
+equipos participantes ponen a prueba sus conocimientos y habilidades en la robótica.  
+ 
+Los drones son vehículos aéreos no tripulados cuyo rango de aplicaciones ha crecido de manera 
+considerable en los últimos años. Pero los drones no solamente sirven como cámaras aéreas para 
+capturar videos o fotos, los drones pueden fungir como robots tambi én, robots aéreos . Esto es posible 
+gracias a la incorporación de computadoras a bordo, que les permiten procesar información obtenida 
+a través de sus sensores y, con ello, generar comandos para sus motores, lo que permite el control del 
+vuelo de manera aut ónoma.  
+ 
+En este 2026, la competencia se basará en las reglas de la Categoría de Interiores del International 
+Micro Air Vehicle Conference and Competition. El dron puede ser comercial, armado o de diseño 
+original. No obstante, el énfasis de la categoría radica en e l diseño de la inteligencia artificial que le 
+permita al dron ejecutar tareas de manera autónoma. Por lo tanto, el puntaje que se asignará será 
+proporcional al desempeño autónomo del dron para ejecutar las misiones.  
+ 
+Figura 1. Dimensiones de la arena de vuelo ( 10x10 metros . La altura máxima será de 4 metros.  
+
+ 
+ 
+  4 
+  2  Reglas de Seguridad  
+ 
+La arena de vuelo está definida por un volumen de 10 x 10 x 4 metros cúbicos (largo x ancho x alto), la 
+cual estará limitada a los lados por una red protectora para evitar que el dron salga de la arena.  
+ 
+Todas las misiones se llevarán a cabo dentro de la arena bajo las siguientes reglas:  
+ 
+1. Todos los participantes deberán estar familiarizados con el contenido del reglamento y 
+cumplirlo en su totalidad.  
+2. Para esta competencia no se permitirá el vuelo manual. Esto incluye despegue y aterrizaje, por 
+lo que todos los vuelos, desde el despegue hasta el aterrizaje, deberán ser completamente 
+autónomos. La acción para activar el despegue o el aterrizaje podrá rea lizarse de forma manual 
+(por ejemplo, mediante una tecla, botón o comando), siempre que la ejecución del despegue o 
+aterrizaje sea autónoma. No se permitirá el pilotaje manual en ninguna fase del vuelo.  
+3. Antes del inicio de la competencia se indicará una zona de despegue, la cual será la misma para 
+todos los equipos. No se permitirá el uso de ninguna otra zona para el despegue.  
+4. Para esta competencia, los drones no deberán exceder 60 cm de tamaño , medido en diagonal 
+desde la punta de una hélice hasta la punta de la hélice opuesta.  
+5. Se permitirá el uso de múltiples drones, con un máximo de tres (3) drones  por equipo, siempre 
+y cuando el peso máximo de cada dron sea de 300g o menor.En caso de que alguno de los drones 
+exceda este peso, solo se permitirá operar un dron a la vez.  
+6. Todos los MAVs deberán permanecer dentro del área de vuelo designada y estarán sujetos a 
+inspección previa por parte de la organización para verificar que se encuentran en condiciones 
+aptas para volar.  
+7. Cada equipo deberá designar un piloto de seguridad , quien será responsable de vigilar en todo 
+momento el comportamiento del MAV durante su operación y de ejecutar el procedimiento de 
+emergencia indicado por la organización en caso de riesgo.  
+8. En la arena de vuelo se permitirá la presencia de un juez, quien tendrá la autoridad para dar por 
+terminada una misión si considera que el MAV no cumple con las condiciones de seguridad o 
+representa algún riesgo.  
+9. Las misiones se ejecutarán una a la vez, y solo un equipo podrá participar durante su turno 
+asignado. Los demás equipos deberán permanecer fuera de la arena, en la zona de espera 
+designada.  
+10. Los integrantes del equipo solo podrán ingresar a la arena antes del inicio de la misión para 
+colocar el MAV o realizar ajustes previamente autorizados por el juez, y una vez que la misión 
+haya sido dada por terminada.  
+11. Fuera de la arena de vuelo se contará con una mesa de trabajo denominada “estación de 
+control”, donde los equipos deberán permanecer durante la ejecución de la misión. No se 
+permitirá abandonar dicha estación, salvo para la colocación o recolección del MAV . 
+12. Si el MAV impacta la malla de protección, un poste, una estructura u otro elemento dentro de 
+la arena, el juez podrá dar por terminada la misión de manera inmediata.  
+ 
+ 
+  5 
+ 13. Si el MAV supera una altura de 4 metros, el juez solicitará un aterrizaje inmediato, dando por 
+concluida la misión.  
+14. Si el MAV pierde el control de forma abrupta, se impacta violentamente o genera una situación 
+de riesgo, el equipo podrá ser descalificado. Es responsabilidad del equipo garantizar que el 
+MAV pueda detenerse o aterrizar de manera segura en todo momento.  
+15. El procesamiento del MAV podrá realizarse a bordo o de manera remota desde la estación de 
+control. En todos los casos, el equipo deberá demostrar al juez que cuenta con un mecanismo 
+de paro o aterrizaje de emergencia.  La ausencia de este mecanismo impedirá la participación 
+del equipo.  
+16. Los sensores a bordo no deberán emitir señales, luces u ondas que puedan afectar a las personas 
+o interferir con otros sistemas dentro de la arena.  
+17. En caso de utilizar baterías de polímero de litio (LiPo):  
+a. Estas deberán encontrarse cargadas antes de iniciar la misión.  
+b. No está permitido cargar baterías durante la ejecución de una misión.  
+c. Las baterías no utilizadas deberán almacenarse en bolsas de seguridad adecuadas y 
+cargarse únicamente en la estación designada.  
+18. Queda estrictamente prohibido realizar pruebas fuera de la arena de vuelo durante la 
+competencia. Únicamente el equipo en turno podrá encender su MAV. Los equipos en espera 
+no deberán encender drones ni dispositivos que puedan generar interferencias.  
+19. Las condiciones de iluminación dentro de la arena pueden variar durante el desarrollo de la 
+competencia, en intensidad, dirección o distribución. Los equipos deberán preparar sus 
+sistemas para operar bajo condiciones de iluminación no controladas, incluyen do posibles 
+sombras, reflejos o cambios en la iluminación ambiental. La organización no garantiza 
+condiciones de iluminación constantes.  
+20. Las instrucciones proporcionadas por los jueces y el personal de la organización deberán 
+seguirse sin objeción. Las decisiones del panel de jueces serán definitivas.  
+21. El incumplimiento de cualquiera de estas reglas podrá resultar en penalización o 
+descalificación.  
+ 
+Cada equipo es plenamente responsable de los daños que pueda sufrir su MAV, así como de cualquier 
+daño que este pueda ocasionar a terceros, a la infraestructura o a otros equipos durante la 
+competencia. La organización no se hace responsable por daños mate riales o personales derivados de 
+la operación de los drones.  
+ 
+ 3  Sobre los Vehículos (Drones)  
+ 
+ 3.1  Sobre el hardware  
+ 
+Los equipos pueden participar con cualquier tipo de dron. Sin embargo, el dron no podrá exceder un 
+diámetro de 60 centímetros , tomando la medición más larga desde la punta de una hélice a otra hélice. 
+El dron podrá estar equipado con cámaras, sensores de ultrasonido, láser, etc, siempre que se indique 
+ 
+ 
+  6 
+ con claridad que ninguno de los sensores o dispositivos a utilizar a bordo del dron puede afectar a las 
+personas , por ejemplo, un láser que pueda afectar la vista.  
+ 
+Para comprobar la seguridad de sensores especializados (como láser), deberán mostrar  los manuales 
+correspondientes donde se pueda verificar que no hay alguna restricción que permita su uso en público.  
+Tampoco existe restricción alguna con respecto al tipo de computadoras que pueden ir a bordo del 
+dron, o bien, que pueden utilizarse en la estación de control.  
+ 
+Si se utilizan baterías de tipo Polímero de Litio, éstas deben ser inspeccionadas por el juez antes de 
+iniciar con la misión para confirmar su buen estado. Baterías infladas o con riesgo de explotar no deben 
+ser utilizadas durante la competencia. Cualquier  equipo que se presente a la competencia con baterías 
+que se identifiquen como de riesgo será descalificado.  
+ 
+Los equipos pueden participar con más de un dron, pero solo un dron podrá ser utilizado a la vez 
+durante cada misión.  
+ 
+ 3.2  Acerca del Software  
+ 
+Los equipos participantes pueden utilizar cualquier sistema operativo para operar a los drones. 
+También se puede utilizar software libre, software propio o comercial, así como cualquier lenguaje de 
+programación.  
+ 
+ 4  Reglas  
+ 
+La competencia se realizará durante los dos días del evento. Sin embargo, habrá intervalos para que los 
+equipos puedan calibrar y practicar dentro de la arena. Cada equipo contará con un tiempo máximo de 
+15 a 20 minutos para su participación, dependiendo d e la cantidad de equipos inscritos. 
+Adicionalmente, antes de su primer intento en la competencia, dispondrán de 2 minutos de 
+preparación.  
+ 
+El orden de participación de los equipos se determinará mediante un sorteo realizado la mañana del 
+día de la competencia. En cualquier momento, antes o durante su participación, cada equipo podrá 
+decidir una única vez posponer el resto de su participación.  En ese caso, su turno de vuelo se moverá 
+al final de la lista. Por lo tanto, todos los equipos deben estar preparados para volar en cualquier 
+momento. El incumplimiento de esta regla podrá resultar en una penalización o descalificación.  
+ 
+Podrán participar estudiantes a partir de nivel preparatoria, acompañados de un mentor, así como 
+estudiantes de licenciatura o posgrado. No es obligatorio contar con un mentor, pero cada equipo 
+deberá tener un capitán designado.  
+ 
+Es importante resaltar que bajo ninguna circunstancia se permitirá el pilotaje del dron por algún 
+miembro del equipo.  El vuelo debe ser autónomo  y la única ocasión en la que el equipo podrá intervenir  
+ 
+ 
+  7 
+ es cuando se prepare el despegue del vehículo o cuando se tenga que aterrizar ya sea porque la regla 
+establece el momento de aterrizaje o porque el juez solicite un aterrizaje de emergencia.  
+ 
+NOTA : Una vez que el dron despegue, ningún miembro del equipo participante podrá controlar al dron 
+mediante joystick, dispositivo móvil o computadora. Un miembro del equipo participante deberá ser 
+asignado como el “ piloto ” y, por lo tanto, solo él podrá accionar los controles correspondientes para el 
+despegue y el aterrizaje. El resto de los miembros deberá tener las manos libres a la vista del juez.  
+ 
+ 4.1  Elemento que NO se realizará del IMAV 202 5 
+ 
+Debido a las características del recinto, las condiciones de seguridad y los lineamientos logísticos 
+propios del Torneo Mexicano de Robótica (TMR) 2026, no se implementará el uso de humo en la 
+Mission 4: Land on a moving platform with smoke , descrita en el reglamento del IMAV 2025.  
+ 
+En consecuencia, durante el TMR 2026 esta misión se llevará a cabo sin presencia de humo, y no se 
+aplicarán criterios de evaluación o puntuación asociados a dicho elemento.  
+ 
+ 4.2  Preparación e Inicio de las Misiones  
+ 
+Cuando un equipo ingrese a la arena de vuelo para competir, éste deberá presentarse con los jueces 
+para llevar a cabo una revisión de sus drones. En este tiempo se revisará el control del dron, es decir, 
+que el piloto pueda cancelar el vuelo autónomo en ca so de fallo. Durante esta revisión el equipo 
+también deberá indicar las misiones que intentará ejecutar y quién será el piloto.  
+ 
+Una vez pasada la revisión, el equipo tendrá  2 minutos  para instalarse en la estación de control, una 
+vez que se encuentren listos deberán indicarlo al juez y en ese instante el cronómetro comenzará a 
+correr.  
+ 
+Cada intento se considera "terminado" al concluir con éxito alguna de las misiones. Si el dron toca el 
+suelo, después de iniciada una misión , mal funcionamiento (no puede mantener un vuelo seguro y 
+controlado), o si el operador del equipo declara haber terminado el intento, este intento se considera 
+"no terminado". Una vez que la misión se da por terminada, un miembro del equipo podrá ingresar a 
+la arena para tomar al dron y alistarlo para continuar con la siguiente misión que se haya elegido.  
+ 
+ 5  Misiones  
+ 
+Las misiones de esta categoría se toman directamente del Rulebook oficial del evento internacional 
+IMAV 2025 (International Micro Air Vehicle Conference and Competition), el cual está orientado a la 
+aplicación de vehículos aéreos de micro tamaño (MAVs) en operaciones de búsqueda y rescate.  
+La competencia consta de cuatro elementos de misión. Los equipos deberán intentar completar tantos 
+elementos como sea posible para obtener la máxima puntuación.  
+ 
+ 
+  8 
+  
+Antes del inicio de la competencia se indicará una zona de despegue, la cual será la misma para todos 
+los equipos. El despegue desde el suelo es obligatorio y puede realizarse de manera manual o 
+autónoma. No se utilizará ninguna otra zona para el despegue.  
+ 
+A continuación, se enlistan las misiones tomadas del “Rulebook IMAV 2025”, las cuales se presentan 
+en su versión original en inglés:  
+https://femexrobotica.org/imav2025/wp -content/uploads/2025/11/RuleBook_IMAV2025.pdf  
+ 
+Mission 1: Enter the room  
+ 
+In this mission, the MAV has four options to enter the room:  
+1. Free passage: A free path can be followed to enter the navigation area. The width of the free path 
+is 1 m.  
+2. Three tunnel -like spaces are formed by aligning five square gates horizontally, each creating a 
+tunnel 2m in length and 2 m in total height.  Each gate consists of two parts: a lower base and an 
+open window. The sum of both is always 2 m in height . The three tunnels differ only in the size of 
+the square window, which are:  
+a. Wide tunnel: window size 1.5 m x 1.5 m, with a base of 0.5 m.  
+b. Medium tunnel: window size 1 m x 1 m, with a base of 1 m.  
+c. Small tunnel: window size 0.5 m x 0.5 m, with a base of 1.5 m.  
+ 
+ 
+Top view of the 10 m x 10 m indoor arena.  
+
+ 
+ 
+  9 
+  
+ 
+Square gate tube diameter: ⌀ 38.1 mm (1.5"). All gates use the same tube diameter.  
+ 
+ 
+3D view of the 10 m x 10 m indoors arena. Tunnel -like spaces are formed by the gates in blue, green and red.  
+            
+
+ 
+ 
+  10 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Black Boxes 57 cm x 78 cm x 36 cm.  
+ 
+ 
+Poles with a diameter of 30 cm, 2.7 metres in height.  
+ 
+
+ 
+ 
+  11 
+ Mission 2: Draw on the whiteboard  
+ 
+To emulate the interaction of the MAV with the environment, for instance, if the MAV had to touch a 
+surface, in this mission, a whiteboard of 1.2 m x 1.5 m  will be laid horizontally on one of the walls at a 
+height of 1 m from the floor to the center of the plate.  The MAV should approach this board and touch 
+it in order to draw a horizontal continuous line . The exact coordinates of the whiteboard will be disclosed 
+at the beginning of the competition. The line does not have to be horizontally perfect, but it has to be 
+continuous. More points will be awarded depending on the length of the drawing on the horizontal axis. 
+Every additional 20 cm of the horizontal line will grant points.  
+ 
+Notes:  
+• If the position of the whiteboard is to be found visually instead of geometrically, an ARUCO 
+marker of 20 cm x 20 cm will be placed next to the left border (outside the whiteboard) at a 
+height of 1.6 m.  
+• The drawing will not be considered valid if it is the result of the MAV crashing into the 
+whiteboard.  
+ 
+The ARUCO marker of 5 x 5 binary patterns has been coded to represent the number 100 with the 
+following appearance:  
+ 
+ 
+ 
+Mission 3: Find the cry for help sound and deliver a med -kit 
+ 
+Inside the room, in a random location, a black box of 57 cm x 78 cm x 36 cm will be placed on the floor. 
+Inside it, there will be a speaker producing the sound of somebody crying out for help. This sound is 
+expected to reach at least 70 dB  (measured from 1 m from the top of the upwards facing speaker). The 
+MAV must locate this box and throw a med -kit inside it. The med kit will be a box of 20 cm x 10 cm x 5 
+cm with a weight of 30 g. Teams can bring their med kit as long as these dimensions are followed . It 
+
+ 
+ 
+  12 
+ does not matter if the MAV carries the med -kit on top of it or underneath, with a suspended cable or a 
+clamp.  
+ 
+Notes:  
+• The team can opt out of searching the box, instead, the approximate location of the box to 
+deliver the med -kit will be given, but points will be given only if the delivery is successful.  
+• More than one box like the one containing the speaker will be placed on the floor. Up to 5 
+boxes will be located on the floor in random positions. The box and the speaker would be the 
+same color. Additional points will be awarded if this level of difficult y is chosen.  
+ 
+Mission 4: Land on a moving platform with smoke  
+The MAV must land on a moving platform positioned at a fixed location within the room. This platform 
+will be a 1 m x 1 m rectangular board that moves laterally, sliding up to 1 m sideways at a speed of 0.5 
+m/s (this speed is expected at average, but very importantly, it will not be faster than this) . A smoke 
+machine will be placed next to the platform to produce smoke, partially obscuring it.  
+Note: Teams may choose not to use the smoke machine. They may also request a stationary platform 
+instead of a moving one. However, higher scores will be awarded if the MAV successfully lands on 
+the moving platform and/or while smoke is present.  
+The visual appearance of the take -off area and landing platform is given in the figure below:  
+ 
+ 
+Visual appearance and dimensions of the take -off zone and landing platform.  
+ 
+ 
+ 
+
+ 
+ 
+  13 
+  6  Sistema de Puntaje  
+ 
+Se utilizará el mismo sistema de puntuación indicado en el Rulebook oficial del IMAV 2025, descrito 
+en las páginas 15 –16, sección “Scoring”.  
+ 
+https://femexrobotica.org/imav2025/wp -content/uploads/2025/11/RuleBook_IMAV2025.pdf  
+ 
+Mission 1: Enter the room  
+Task  Free path  Tunnel 1.5 m  Tunnel 1 m  Tunnel 
+0.5 m  
+Pts 0 1 2 3 
+Mission 2: Draw on the whiteboard  Extra Pts  
+Task  No drawing  Continuous line 
+(min. of 20 cm).  For every additional 
+20 cm of continuous 
+line 
+Pts 0 3 +1 
+Mission 3: Find the cry for help sound and deliver a med -kit 
+Task  Box not found  Box Found  Med -kit delivered  
+Pts 0 3 2 
+Mission 4: Land on a moving platform with smoke  Extra Pts  
+Task  No landing  Landing  Landing with the moving platform  
+Pts 0 2 +3 
+Single MAV Onboard Processing  Final Score x 1.5  
+Swarm Solution Offboard Processing  Final Score x 2.0  
+Swarm Solution Onboard Processing  Final Score x 3.0  
+Presentation during participation  Final Score + 3 x (0…10) * 
+* Judges will grant a score between 0 and 10 upon the team presentation. The final score from judges will be the average after removing the highest and lowest scores.  
+ 
+ 7  Contacto  
+ 
+Cualquier duda o aclaración favor de dirigirla vía email a:  
+ 
+oyukirojas0@gmaill.com   Dra. Leticia Oyuki Rojas Pérez  
+ 
+ 
+ 8  Créditos  
+ 
+ 
+Diseño de logo de portada: Ana Karen Rojas Pérez
+ 
