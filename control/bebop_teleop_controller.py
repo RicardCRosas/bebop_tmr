@@ -56,7 +56,7 @@ class BebopMovements:
 
         self.up(mode_flag)
         self.up(mode_flag)    # Para que suba a la altura del gate con tiempos
-        self.up(mode_flag)
+        #self.up(mode_flag)
 
         # gira un poco y creo eso hace que no se empiece a mover de forma autonoma en lo que aun no ajusta la camara. FAKE
         #self.turn_right(mode_flag) 
@@ -172,7 +172,35 @@ class BebopMovements:
         rospy.sleep(sleep)      
         self.reset_twist()
 
-    def up1(self, mode_flag, speed=1, duration=2.0):
+    def left1(self, mode_flag):
+        if mode_flag != 'automatic' or rospy.is_shutdown():
+            print('\n Movement interrupted')
+            return
+        rospy.sleep(sleep)
+        print('\n Moving left...')
+
+        # Movimiento lateral hacia la izquierda (y positivo)
+        self.twist.linear.y = 0.8
+        self.pub_cmd_vel.publish(self.twist)
+        rospy.sleep(sleep)
+        self.reset_twist()
+
+    def right1(self, mode_flag):
+        if mode_flag != 'automatic' or rospy.is_shutdown():
+            print('\n Movement interrupted')
+            return
+        rospy.sleep(sleep)
+        print('\n Moving right...')
+
+        # Movimiento lateral hacia la derecha (y negativo)
+        self.twist.linear.y = -0.35
+        self.pub_cmd_vel.publish(self.twist)
+        rospy.sleep(sleep)
+        self.reset_twist()
+
+    
+
+    def up1(self, mode_flag, speed=0.25, duration=0.5):
         if mode_flag != 'automatic' or rospy.is_shutdown():
             return
         

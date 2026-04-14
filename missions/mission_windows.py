@@ -17,7 +17,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, '..'))
 sys.path.append(project_root)
 
-
 from control.bebop_teleop_controller import BebopMovements
 from perception.square_detector import BebopCameraProcessor
 
@@ -67,35 +66,34 @@ class MissionWindows:
         # ========================
         self.latest_image_msg = None
         self.latest_data = None
-        self.last_detection_time = rospy.Time.now()
+        self.token = 0  # 0 = buscando, 1 = detectando/seguimiento, 2 = post-detección
+        self.last_detected_time = None
 
         self.finished = False
-        self.center_tolerance = 25
-        self.vertical_tolerance = 25
-        self.forward_counter = 0
-        self.aligned_x_counter = 0
+        self.center_tolerance = 10
+        self.vertical_tolerance = 15
+
+        self.kx = 0.00025
+        self.ky = 0.00025
+
+        # 🔥 CONTROL AVANCE
+        self.desired_size = 160000
+        self.k_forward = 0.0001
+        self.max_vx = 0.2
+        self.min_vx = 0.05
 
         self.debug_image = None
 
         rospy.loginfo("Mission Windows initialized")
 
     # =====================================================
-    # IMAGE CALLBACK (SIN PROCESAMIENTO)
+    # IMAGE CALLBACK
     # =====================================================
     def image_callback(self, msg):
         if self.finished:
             return
         self.latest_image_msg = msg
 
-    def alv(self, impulsos):
-        print('\n alv...')
-        for i in range (0, impulsos):
-            self.movements.forward1("automatic")
-            self.movements.forward1("automatic")
-            self.movements.up1("automatic")
-            rospy.sleep(0.75)
-            return
-        
     # =====================================================
     # PROCESS IMAGE
     # =====================================================
@@ -110,71 +108,82 @@ class MissionWindows:
             rospy.logerr(f"CvBridge error: {e}")
             return
 
-        # Reducir resolución
         frame = cv2.resize(frame, (640, 360))
 
-        # =========================
-        # MEDIR DELAY DE CÁMARA
-        # =========================
-        msg_time = self.latest_image_msg.header.stamp.to_sec()
-        now_time = rospy.Time.now().to_sec()
-        camera_delay = now_time - msg_time
-
-        # =========================
-        # MEDIR INFERENCIA
-        # =========================
-        start_time = rospy.Time.now()
         processed_image, data, _ = self.detector.process_image(frame)
-        end_time = rospy.Time.now()
-
-        inference_time = (end_time - start_time).to_sec()
-
-        # =========================
-        # DIBUJAR INFO
-        # =========================
-        cv2.putText(processed_image,
-                    f"Inference: {inference_time*1000:.1f} ms",
-                    (20, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (0, 255, 0),
-                    2)
-
-        cv2.putText(processed_image,
-                    f"Delay: {camera_delay*1000:.1f} ms",
-                    (20, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (255, 255, 0),
-                    2)
 
         self.debug_image = processed_image
         self.latest_data = data
-        self.last_detection_time = rospy.Time.now()
 
     # =====================================================
     # CONTROL LOGIC
     # =====================================================
     def control_logic(self):
-        token = 0
 
         if self.latest_data is None:
             return
 
         data = self.latest_data
+        detected = data.get("detected", False)
 
-        # 🔥 PRIMERO verificar detección
-        if not data.get("detected", False):
-            rospy.loginfo("Searching window...")
-            rospy.sleep(1.0)  # 🔥 evitar spamear el log
+        twist = Twist()
+
+        #=============
+        #TIME
+        #=============
+
+        now = rospy.Time.now()
+
+        if self.last_detected_time is not None:
+            elapsed = (now - self.last_detected_time).to_sec()
+        else:
+            elapsed = None
+
+        
+        # ========================
+        # SIN DETECCIÓN
+        # ========================
+        if self.token == 0 and not detected:
+            rospy.loginfo("Searching LEFT...")
+            #self.movements.left("automatic")
+            rospy.sleep(0.5)
             return
         
-        cx = data["cx"]
-        cy = data["cy"]
-        center_x = data["center_x"]
-        center_y = data["center_y"]
+        if detected:
+            self.last_detected_time = now
 
-        center_y = center_y - 25  # 🔥 ajustar centro vertical para compensar cámara inclinada
+            if self.token != 1:
+                rospy.loginfo("Target detected → switching to tracking")
+                self.token = 1
+
+        if self.token == 1 and not detected:
+            if elapsed is None:
+                return
+            if elapsed >= 1.5:
+                rospy.loginfo(f"Lost target... waiting {elapsed:.2f}s")
+            # Espera 3.5 segundos para ver si reaparece
+            if elapsed < 5:
+                return
+            rospy.loginfo("No detection → executing final sequence")
+
+            # avanzar y girar
+            if elapsed > 5 and elapsed <= 7:
+                twist.linear.x = 0.20
+                self.pub_cmd.publish(twist)
+                return
+            self.movements.reset_twist()
+            self.movements.turn_right("automatic")
+            rospy.sleep(1.0)
+            # aterrizar
+            self.movements.landing("automatic")
+            self.finished = True
+            return
+
+        # ========================
+        # ERRORES
+        # ========================
+        cx, cy = data["cx"], data["cy"]
+        center_x, center_y = data["center_x"], data["center_y"]
 
         error_x = cx - center_x
         error_y = cy - center_y
@@ -183,83 +192,57 @@ class MissionWindows:
         aligned_y = abs(error_y) < self.vertical_tolerance
 
         # ========================
-        # CONTROL SECUENCIAL
+        # CONTROL LATERAL
         # ========================
-
-        # 1️⃣ Alinear en X
-        if (not aligned_x):
-            if error_x < 0:
-                rospy.loginfo("Adjusting LEFT")
-                self.movements.left("automatic")
-                self.aligned_x_counter += 1
-            else:
-                rospy.loginfo("Adjusting RIGHT")
-                self.movements.right("automatic")
-                self.aligned_x_counter += 1            
+        if not aligned_x:
+            twist.linear.y = -error_x * self.kx
+            self.pub_cmd.publish(twist)
+            rospy.loginfo("Align x")
             return
-        
-        if (not aligned_y):
-            if error_y < 0:
-                rospy.loginfo("Adjusting down")
-                self.movements.down1("automatic")
-            else:
-                rospy.loginfo("Adjusting up")
-                self.movements.up1("automatic")
 
-        if aligned_x:
-            token = 1
+        # ========================
+        # CONTROL VERTICAL
+        # ========================
+        if not aligned_y:
+            twist.linear.z = -error_y * self.ky
+            self.pub_cmd.publish(twist)
+            rospy.loginfo("Align y")
+            return
 
-            # 3️⃣ Avanzar
+        # ========================
+        # CONTROL AVANCE (SIZE)
+        # ========================
+        size = data.get("size", None)
 
-        if token == 1:
-            rospy.loginfo("Centered → FORWARD")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 1")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 2")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 3")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 4")
-            #rospy.sleep(0.5)
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 5")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 6")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 7")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 8")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 9")
-            self.movements.forward1("automatic")
-            rospy.loginfo("forward 10")
-            self.movements.forward1("automatic")
-            rospy.loginfo("Window passed!")
-            self.finish_mission()
+        if size is None:
+            return
 
+        error_size = self.desired_size - size
 
-        '''  4️⃣ Condición de éxito
-        time_since_last_detection = (rospy.Time.now() - self.last_detection_time).to_sec()
+        vx = self.k_forward * error_size
 
-        if time_since_last_detection > 5 :'''
-            
+        # zona muerta
+        if abs(error_size) < 10000:
+            vx = 0.0
 
-    # =====================================================
-    # FINISH MISSION
-    # =====================================================
-    def finish_mission(self):
-        self.movements.landing("automatic")
-        self.status_pub.publish("done")
-        self.finished = True
-        rospy.loginfo("Mission completed")
+        # saturación
+        vx = max(min(vx, self.max_vx), -self.max_vx)
+
+        # evitar quedarse detenido lejos
+        if vx > 0:
+            vx = max(vx, self.min_vx)
+
+        twist.linear.x = vx
+        self.pub_cmd.publish(twist)
+
+        rospy.loginfo(f"Size: {size} | vx: {vx:.3f}")
 
     # =====================================================
     # MAIN LOOP
     # =====================================================
     def run(self):
 
-        rate = rospy.Rate(15)
+        rate = rospy.Rate(20)
 
         while not rospy.is_shutdown():
 

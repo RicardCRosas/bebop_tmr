@@ -114,7 +114,7 @@ class BebopTeleop:
     def init_camera_position(self):
         self.teleop_movements.camera_tilt(-90)  # Mira totalmente hacia abajo
         rospy.sleep(2)
-        self.teleop_movements.camera_tilt(-5)   # Ajusta para ver hacia el frente, antes era 10
+        self.teleop_movements.camera_tilt(0)   # Ajusta para ver hacia el frente, antes era 10
         rospy.sleep(2)
         rospy.loginfo("Camera Initialized")
 
