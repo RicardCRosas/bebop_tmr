@@ -54,6 +54,8 @@ Manual Control:
 Land: 2
 ---------------------------
 Start Mission_square_1: y
+Start Windows_mission: p
+Start Mission_helipad: u
 Start Mission_orange_window: o
 Start Teleop: t
 Emergency: x
@@ -141,7 +143,7 @@ class BebopTeleop:
 
     # ----------------------------------------------------------
     # BUCLE PRINCIPAL: lee las teclas y actúa según el modo
-    # ----------------------------------------------------------
+    # ------------------p----------------------------------------
     def run(self):
         rate = rospy.Rate(50)  # 20 Hz
 
@@ -153,9 +155,9 @@ class BebopTeleop:
                 print("\n--- Starting Mission Square---")
                 self.supervisor.start_mission("mission_square_1") 
             elif key == 'u':
-                self.supervisor.start_mission("mission_square_2")
+                self.supervisor.start_mission("mission_helipad")
             elif key == 'p':
-                self.supervisor.start_mission("mission_square")
+                self.supervisor.start_mission("mission_windows")
             elif key == 'o':
                 self.supervisor.start_mission("mission_orange_window_modified") #orange_window
             elif key == 'm':

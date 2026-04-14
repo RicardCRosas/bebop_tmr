@@ -25,7 +25,7 @@ class MissionSupervisor:
         self.current_mission = None
 
         self.mission_start_time = None
-        self.max_mission_time = 20.0  # Timeout global
+        self.max_mission_time = 60.0  # Timeout global
 
         # Suscriptor al estado de misión
         rospy.Subscriber("/mission/status", String, self.mission_status_callback)
@@ -274,5 +274,4 @@ class MissionSupervisor:
 #    while not rospy.is_shutdown():
 #        supervisor.update()
 #        rate.sleep()
-
 
