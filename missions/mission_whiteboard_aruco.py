@@ -560,13 +560,13 @@ class MissionWhiteboardAruco:
             if not aligned_y:
                 lz = self.align_vertical_speed * 0.75 if err_y < 0 else -self.align_vertical_speed * 0.75
                 
-            if not aligned_x:
-                # Target lateral centrado por strafing
-                ly = self.align_lateral_speed * 0.75 if err_x < 0 else -self.align_lateral_speed * 0.75
-                
             if not aligned_yaw:
-                # Mantener perpendicularidad usando yaw
-                az = -self.search_yaw_speed * 0.5 if marker_yaw > 0 else self.search_yaw_speed * 0.5
+                # Correccion de angulo con desplazamiento lateral (strafe)
+                ly = -self.align_lateral_speed * 0.75 if marker_yaw > 0 else self.align_lateral_speed * 0.75
+                
+            if not aligned_x:
+                # Mantener centrado girando la camara (yaw)
+                az = self.search_yaw_speed * 0.75 if err_x < 0 else -self.search_yaw_speed * 0.75
                 
             self.publish_direct_twist(ly=ly, lz=lz, az=az)
             return
@@ -622,7 +622,7 @@ class MissionWhiteboardAruco:
 
         # Confirmacion combinada:
         # 1) vision fuerte
-        if area >= self.touch_confirm_area and aligned_draw:
+        if area >= self.touch_confirm_area:
             rospy.loginfo("Toque confirmado por vision fuerte.")
             self.board_contact_confirmed = True
             self.stop()
