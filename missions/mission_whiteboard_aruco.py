@@ -153,9 +153,9 @@ class MissionWhiteboardAruco:
         self.approach_speed_near = rospy.get_param("~approach_speed_near", 0.035)
 
         self.touch_forward_speed = rospy.get_param("~touch_forward_speed", 0.025)
-        self.touch_forward_time_max = rospy.get_param("~touch_forward_time_max", 2.5)
+        self.touch_forward_time_max = rospy.get_param("~touch_forward_time_max", 5.0)
 
-        self.draw_forward_bias = rospy.get_param("~draw_forward_bias", 0.015)
+        self.draw_forward_bias = rospy.get_param("~draw_forward_bias", 0.0) # Ajustado a 0.0 para que no presione el pizarrón
         self.draw_lateral_speed = rospy.get_param("~draw_lateral_speed", -0.06)
         self.draw_time = rospy.get_param("~draw_time", 3.4)
 
@@ -173,7 +173,7 @@ class MissionWhiteboardAruco:
         self.post_land_wait = rospy.get_param("~post_land_wait", 2.0)
 
         # Odom-based touch confirmation
-        self.touch_min_progress_for_no_contact = rospy.get_param("~touch_min_progress_for_no_contact", 0.05)
+        self.touch_min_progress_for_no_contact = rospy.get_param("~touch_min_progress_for_no_contact", 0.01)
         self.touch_low_progress_threshold = rospy.get_param("~touch_low_progress_threshold", 0.025)
         self.area_growth_small_threshold = rospy.get_param("~area_growth_small_threshold", 350.0)
 
@@ -584,85 +584,50 @@ class MissionWhiteboardAruco:
         self.set_state("TOUCH_BOARD")
 
     def handle_touch_board(self):
-        data = self.latest_data
+        # En esta resolucion extrema es comun perder el ArUco de vista.
+        # Ya no detenemos la mision si se pierde, ni basamos el exito en el area.
+        # Usaremos Odometria para movernos de forma ciega y segura lo suficiente.
 
-        if data is None or self.marker_lost_for_too_long():
-            rospy.logwarn("Referencia perdida en toque. Retrocediendo por seguridad.")
-            self.stop()
-            self.set_state("BACK_OFF")
-            return
-
-        area = data["area"]
-        tx = data["target_draw_x"]
-        ty = data["target_draw_y"]
         elapsed = self.elapsed_in_state()
-
-        if area >= self.max_safe_area:
-            rospy.logwarn("SAFE AREA SUPERADA. Parada de emergencia. Deteniendo avance y confirmando toque.")
-            self.board_contact_confirmed = True
-            self.stop()
-
-            if self.should_finish_after("TOUCH_OK"):
-                self.finish_mission()
-                return
-
-            self.set_state("DRAW_LINE")
-            return
-
-        # Alineacion final al punto de dibujo
-        err_x = tx - data["center_x"] if tx is not None else 0
-        err_y = ty - data["center_y"] if ty is not None else 0
-        aligned_draw = (
-            abs(err_x) <= self.draw_target_tolerance_x and
-            abs(err_y) <= self.draw_target_tolerance_y
-        )
-
         progress = self.odom_progress_since_touch_start()
-        growth_small = self.area_growth_small(area)
 
-        # Confirmacion combinada:
-        # 1) vision fuerte
-        if area >= self.touch_confirm_area:
-            rospy.loginfo("Toque confirmado por vision fuerte.")
-            self.board_contact_confirmed = True
-            self.stop()
-
-            if self.should_finish_after("TOUCH_OK"):
-                self.finish_mission()
-                return
-
-            self.set_state("DRAW_LINE")
-            return
-
-        # 2) vision + poco avance real + tiempo corto
-        if elapsed >= 0.45 and progress is not None:
-            if area >= self.touch_area_threshold and progress <= self.touch_low_progress_threshold and growth_small:
-                rospy.loginfo(
-                    f"Toque confirmado por vision + odometria. area={area:.1f}, progress={progress:.4f}"
-                )
+        data = self.latest_data
+        # Resguardo extra visual: Si seguimos viendo el ArUco y es masivo, aborta antes.
+        if data is not None and data["detected"]:
+            area = data["area"]
+            if area >= self.max_safe_area:
+                rospy.logwarn("SAFE AREA SUPERADA visualmente. Confirmando proximidad.")
                 self.board_contact_confirmed = True
                 self.stop()
-
                 if self.should_finish_after("TOUCH_OK"):
                     self.finish_mission()
                     return
-
                 self.set_state("DRAW_LINE")
                 return
 
-        # 3) timeout final controlado
-        if elapsed >= self.touch_forward_time_max:
-            rospy.loginfo("Tiempo maximo de toque alcanzado. Confirmando toque controlado.")
+        # 1) Detenerse por odometria (Ej. 5cm configurado)
+        if progress is not None and progress >= self.touch_min_progress_for_no_contact:
+            rospy.loginfo(f"Distancia segura alcanzada por odometria: {progress:.3f}m. Listo para dibujar.")
             self.board_contact_confirmed = True
             self.stop()
-
             if self.should_finish_after("TOUCH_OK"):
                 self.finish_mission()
                 return
-
             self.set_state("DRAW_LINE")
             return
 
+        # 2) Detenerse por tiempo maximo (Backup)
+        if elapsed >= self.touch_forward_time_max:
+            rospy.loginfo("Tiempo maximo finalizado. Listo para dibujar.")
+            self.board_contact_confirmed = True
+            self.stop()
+            if self.should_finish_after("TOUCH_OK"):
+                self.finish_mission()
+                return
+            self.set_state("DRAW_LINE")
+            return
+
+        # Continuar acercandose ciegamente a velocidad baja
         self.publish_direct_twist(lx=self.touch_forward_speed)
 
     def handle_draw_line(self):
