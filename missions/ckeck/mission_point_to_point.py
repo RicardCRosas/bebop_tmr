@@ -30,8 +30,17 @@ class MissionPointToPointSingleTube:
         self.target_tube_bbox_topic = rospy.get_param("~target_tube_bbox_topic", "/target_tube_bbox")
         self.goal_pose_topic = rospy.get_param("~goal_pose_topic", "/goal_pose")
 
+        # Handshake misión 2
+        self.mission2_syn_topic = rospy.get_param("~mission2_syn_topic", "/mission2_syn")
+        self.mission2_syn_ack_topic = rospy.get_param("~mission2_syn_ack_topic", "/mission2_syn_ack")
+        self.mission2_ack_topic = rospy.get_param("~mission2_ack_topic", "/mission2_ack")
+        self.mission2_timeout = rospy.get_param("~mission2_timeout", 1.0)
+
+        # Nuevo handoff a approach_mission_land
+        self.approach_mission_land_topic = rospy.get_param("~approach_mission_land_topic", "/approach_mission_land")
+
         # Variables principales
-        self.advance_distance = rospy.get_param("~advance_distance", 2.6)
+        self.advance_distance = rospy.get_param("~advance_distance", 1.2)
         self.final_hold_time = rospy.get_param("~final_hold_time", 0.5)
         self.handoff_hold_time = rospy.get_param("~handoff_hold_time", 0.5)
         self.ctrl_rate = rospy.get_param("~ctrl_rate", 30.0)
@@ -61,7 +70,6 @@ class MissionPointToPointSingleTube:
         self.kp_y = rospy.get_param("~kp_y", 0.6)
         self.kp_z = rospy.get_param("~kp_z", 0.9)
         self.kp_yaw = rospy.get_param("~kp_yaw", 1.0)
-
         self.vy_max = rospy.get_param("~vy_max", 0.02)
         self.vz_max = rospy.get_param("~vz_max", 0.04)
         self.wz_max = rospy.get_param("~wz_max", 0.20)
@@ -71,7 +79,6 @@ class MissionPointToPointSingleTube:
         self.kp_hold_y = rospy.get_param("~kp_hold_y", 0.9)
         self.kp_hold_z = rospy.get_param("~kp_hold_z", 0.9)
         self.kp_hold_yaw = rospy.get_param("~kp_hold_yaw", 1.0)
-
         self.vx_hold_max = rospy.get_param("~vx_hold_max", 0.025)
         self.vy_hold_max = rospy.get_param("~vy_hold_max", 0.025)
         self.vz_hold_max = rospy.get_param("~vz_hold_max", 0.045)
@@ -115,6 +122,9 @@ class MissionPointToPointSingleTube:
 
         self.selected_percent_history = deque(maxlen=8)
 
+        # Estado handshake misión 2
+        self.mission2_syn_ack_received = False
+
         # Safety teclado
         self.emergency_land = False
         self.keyboard_thread = None
@@ -129,10 +139,15 @@ class MissionPointToPointSingleTube:
         )
         self.goal_pose_pub = rospy.Publisher(self.goal_pose_topic, Float32, queue_size=1, latch=True)
 
+        self.mission2_syn_pub = rospy.Publisher(self.mission2_syn_topic, String, queue_size=1)
+        self.mission2_ack_pub = rospy.Publisher(self.mission2_ack_topic, String, queue_size=1)
+        self.approach_mission_land_pub = rospy.Publisher(self.approach_mission_land_topic, String, queue_size=1)
+
         rospy.Subscriber(self.odom_topic, Odometry, self.odom_callback, queue_size=1)
         rospy.Subscriber(self.average_topic, Float32MultiArray, self.average_callback, queue_size=1)
         rospy.Subscriber(self.bboxes_topic, Int32MultiArray, self.bboxes_callback, queue_size=1)
         rospy.Subscriber(self.activation_topic, String, self.activation_callback, queue_size=1)
+        rospy.Subscriber(self.mission2_syn_ack_topic, String, self.mission2_syn_ack_callback, queue_size=1)
 
         self.rate = rospy.Rate(self.ctrl_rate)
 
@@ -186,6 +201,12 @@ class MissionPointToPointSingleTube:
         if command == "READY" and not self.is_active:
             self.is_active = True
             rospy.loginfo("mission_point_to_point activado por READY")
+
+    def mission2_syn_ack_callback(self, msg):
+        data = msg.data.strip().upper()
+        if data == "LISTO":
+            self.mission2_syn_ack_received = True
+            rospy.loginfo("MISSION2_SYN_ACK recibido: LISTO")
 
     def odom_callback(self, msg):
         self.current_x = msg.pose.pose.position.x
@@ -408,6 +429,130 @@ class MissionPointToPointSingleTube:
         self.land_pub.publish(Empty())
         rospy.sleep(2.0)
 
+    def hold_position_no_land(self, hold_time, x_ref, y_ref, z_ref, yaw_ref, label="HOLD"):
+        rospy.loginfo("%s %.1f s...", label, hold_time)
+        hold_start = rospy.Time.now().to_sec()
+        while not rospy.is_shutdown():
+            if self.check_emergency_land():
+                return
+            if rospy.Time.now().to_sec() - hold_start >= hold_time:
+                break
+            if self.has_pose():
+                vx, vy, vz, wz = self.compute_hold_cmd(x_ref, y_ref, z_ref, yaw_ref)
+                self.publish_cmd_raw(vx, vy, vz, wz)
+            else:
+                self.publish_cmd_raw(0.0, 0.0, 0.0, 0.0)
+            self.rate.sleep()
+        self.publish_zero_cmd_burst()
+        rospy.sleep(0.1)
+
+    def rotate_90_deg_clockwise_then_handoff_approach(self):
+        if not self.has_pose():
+            self.publish_zero_cmd_burst()
+            rospy.sleep(0.1)
+            rospy.logwarn("Sin pose para rotar. Publicando MOVE a approach_mission_land.")
+            self.approach_mission_land_pub.publish(String(data="MOVE"))
+            return
+
+        yaw_ref = self.current_yaw
+        target_yaw = self.normalize_angle(yaw_ref - math.pi / 2.0)
+
+        rospy.loginfo("Misión 2 no disponible. Rotando 90 grados horario...")
+        while not rospy.is_shutdown():
+            if self.check_emergency_land():
+                return
+
+            if not self.has_pose():
+                self.publish_cmd_raw(0.0, 0.0, 0.0, 0.0)
+                self.rate.sleep()
+                continue
+
+            eyaw = self.normalize_angle(target_yaw - self.current_yaw)
+            if abs(eyaw) <= math.radians(3.0):
+                break
+
+            wz = self.saturate(1.0 * eyaw, self.wz_hold_max)
+            self.publish_cmd_raw(0.0, 0.0, 0.0, wz)
+            self.rate.sleep()
+
+        self.publish_zero_cmd_burst()
+        rospy.sleep(0.1)
+
+        if self.has_pose():
+            x_hold = self.current_x
+            y_hold = self.current_y
+            z_hold = self.current_z
+            yaw_hold = self.current_yaw
+            self.hold_position_no_land(
+                self.final_hold_time, x_hold, y_hold, z_hold, yaw_hold,
+                label="HOLD después de rotar antes de ceder a approach_mission_land"
+            )
+
+        # liberar cmd_vel antes de avisar al siguiente nodo
+        self.publish_zero_cmd_burst()
+        rospy.sleep(0.1)
+
+        rospy.loginfo("PUBLICANDO MOVE EN %s", self.approach_mission_land_topic)
+        self.approach_mission_land_pub.publish(String(data="MOVE"))
+
+    def do_hold_then_check_mission2(self, hold_time, x_ref, y_ref, z_ref, yaw_ref):
+        rospy.loginfo("HOLD %.1f s antes de verificar misión 2...", hold_time)
+        hold_start = rospy.Time.now().to_sec()
+
+        while not rospy.is_shutdown():
+            if self.check_emergency_land():
+                return True
+
+            if rospy.Time.now().to_sec() - hold_start >= hold_time:
+                break
+
+            if self.has_pose():
+                vx, vy, vz, wz = self.compute_hold_cmd(x_ref, y_ref, z_ref, yaw_ref)
+                self.publish_cmd_raw(vx, vy, vz, wz)
+            else:
+                self.publish_cmd_raw(0.0, 0.0, 0.0, 0.0)
+
+            self.rate.sleep()
+
+        self.mission2_syn_ack_received = False
+        rospy.loginfo("PUBLICANDO SYN EN %s: LISTO", self.mission2_syn_topic)
+        self.mission2_syn_pub.publish(String(data="LISTO"))
+
+        wait_start = rospy.Time.now().to_sec()
+        while not rospy.is_shutdown():
+            if self.check_emergency_land():
+                return True
+
+            if self.has_pose():
+                vx, vy, vz, wz = self.compute_hold_cmd(x_ref, y_ref, z_ref, yaw_ref)
+                self.publish_cmd_raw(vx, vy, vz, wz)
+            else:
+                self.publish_cmd_raw(0.0, 0.0, 0.0, 0.0)
+
+            if self.mission2_syn_ack_received:
+                rospy.loginfo("MISSION2_SYN_ACK recibido dentro del timeout.")
+
+                # Liberar cmd_vel antes del ACK final
+                self.publish_zero_cmd_burst()
+                rospy.sleep(0.1)
+
+                rospy.loginfo("PUBLICANDO ACK EN %s: LISTO", self.mission2_ack_topic)
+                self.mission2_ack_pub.publish(String(data="LISTO"))
+
+                rospy.loginfo("Control liberado para misión 2. mission_point_to_point termina.")
+                return True
+
+            if rospy.Time.now().to_sec() - wait_start >= self.mission2_timeout:
+                rospy.logwarn("Timeout esperando respuesta de misión 2.")
+                break
+
+            self.rate.sleep()
+
+        self.publish_zero_cmd_burst()
+        rospy.sleep(0.1)
+        self.rotate_90_deg_clockwise_then_handoff_approach()
+        return True
+
     def capture_start_references(self):
         if not self.has_pose():
             rospy.logwarn("No hay pose actual para capturar referencias iniciales.")
@@ -500,8 +645,6 @@ class MissionPointToPointSingleTube:
         if not self.capture_start_references():
             return
 
-        move_start = rospy.Time.now().to_sec()
-
         while not rospy.is_shutdown():
             if self.check_emergency_land():
                 return
@@ -515,19 +658,20 @@ class MissionPointToPointSingleTube:
             ez = self.z_ref - self.current_z
             eyaw = self.normalize_angle(self.yaw_ref - self.current_yaw)
 
-            if rospy.Time.now().to_sec() - move_start > self.max_move_time:
-                rospy.logwarn("Timeout de misión.")
-                self.publish_zero_cmd_burst()
-                self.land_pub.publish(Empty())
-                rospy.sleep(2.0)
-                return
-
             if remaining <= self.goal_tolerance:
                 rospy.loginfo(
                     "PUNTO B ALCANZADO | x_goal=%.3f x_actual=%.3f restante=%.3f",
                     self.x_goal, self.current_x, remaining
                 )
-                self.do_hold_then_land(self.final_hold_time)
+                x_hold = self.current_x
+                y_hold = self.current_y
+                z_hold = self.current_z
+                yaw_hold = self.current_yaw
+                mission_finished = self.do_hold_then_check_mission2(
+                    self.final_hold_time, x_hold, y_hold, z_hold, yaw_hold
+                )
+                if mission_finished:
+                    return
                 return
 
             no_tube_recent = (
