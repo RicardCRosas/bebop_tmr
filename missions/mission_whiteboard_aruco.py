@@ -257,11 +257,23 @@ class MissionWhiteboardAruco:
         except: return
         frame = cv2.resize(frame, (self.image_width, self.image_height))
         processed_img, data = self.detector.process_image(frame)
-        self.debug_image = processed_img
-        self.latest_data = data
         if data["detected"]:
             self.last_detection_time = rospy.Time.now()
             self.latest_known_area = data["area"]
+            
+            # Loguear iterativamente en consola a 1 Hz
+            rospy.loginfo_throttle(1.0, f"[{self.state}] ArUco OK | Area actual: {data['area']:.0f} px")
+            
+            # Dibujarlo bien grande en la ventana
+            cv2.putText(processed_img, f"AREA PIXELES: {data['area']:.0f}", (15, 40), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 3)
+        else:
+            rospy.loginfo_throttle(2.0, f"[{self.state}] Buscando... | Ultima area: {self.latest_known_area:.0f} px")
+            cv2.putText(processed_img, f"NO DETECTADO (Ultima: {self.latest_known_area:.0f} px)", (15, 40), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+
+        self.debug_image = processed_img
+        self.latest_data = data
 
     def set_state(self, new_state):
         if self.state != new_state:
