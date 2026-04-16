@@ -24,7 +24,7 @@ Asegúrate de que:
 
 ## Recompilar
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 catkin_make
 source devel/setup.bash
@@ -35,15 +35,15 @@ Si el código no corre o ROS no encuentra los paquetes, ejecuta esto una sola ve
 
 ### 1. Permisos de archivos
 ```bash
-chmod +x ~/catkin_ws/src/bebop_tmr/missions/*.py
-chmod +x ~/catkin_ws/src/bebop_tmr/perception/*.py
-chmod +x ~/catkin_ws/src/bebop_tmr/bebop_core/*.py
+chmod +x ~/bebop_ws/src/bebop_tmr/missions/*.py
+chmod +x ~/bebop_ws/src/bebop_tmr/perception/*.py
+chmod +x ~/bebop_ws/src/bebop_tmr/bebop_core/*.py
 ```
 
 ### 2. Compilación y Source
 Asegúrate de estar en la raíz de tu workspace:
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 catkin_make
 source devel/setup.bash
 ```
@@ -53,7 +53,7 @@ source devel/setup.bash
 # PRUEBA 1 — Solo cámara del dron
 ## Terminal 1 — levantar cámara del Bebop
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 roslaunch bebop_tmr bebop_node.launch
@@ -61,7 +61,7 @@ roslaunch bebop_tmr bebop_node.launch
 
 ## Terminal 2 — verificar que la cámara publique
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 rostopic list | grep bebop
@@ -70,7 +70,7 @@ rostopic hz /bebop/image_raw
 
 ## Terminal 3 — test de detección ArUco
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 rosrun bebop_tmr test_aruco_bebop_camera.py
@@ -88,7 +88,7 @@ rosrun bebop_tmr test_aruco_bebop_camera.py
 
 ## Terminal 1 — cámara del dron
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 roslaunch bebop_tmr bebop_node.launch
@@ -96,7 +96,7 @@ roslaunch bebop_tmr bebop_node.launch
 
 ## Terminal 2 — verificar imagen
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 rostopic hz /bebop/image_raw
@@ -106,7 +106,7 @@ rostopic hz /bebop/image_raw
 
 ### 1. Despegar
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
@@ -134,7 +134,7 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 
 ### 1. Despegar
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
@@ -162,7 +162,7 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 
 ### 1. Despegar
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
@@ -188,7 +188,7 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 
 ### 1. Despegar
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
@@ -216,7 +216,7 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 
 ### 1. Despegar
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
@@ -243,7 +243,7 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 
 ### 1. Despegar
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
@@ -278,7 +278,7 @@ La misión completa debe hacer:
 # PRUEBA 3 — Ver comandos del dron
 ## Terminal extra opcional
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 rostopic echo /bebop/cmd_vel
@@ -293,7 +293,7 @@ rostopic echo /bebop/cmd_vel
 # PRUEBA 4 — Ver imagen directa del dron
 ## Terminal extra opcional
 ```bash
-cd ~/catkin_ws
+cd ~/bebop_ws
 source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 rqt_image_view
