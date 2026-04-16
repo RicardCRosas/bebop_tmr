@@ -137,10 +137,10 @@ class MissionWhiteboardAruco:
         self.draw_target_tolerance_y = rospy.get_param("~draw_target_tolerance_y", 40) # Ampliada (era 25)
 
         # Areas (Vision approach sizing)
-        self.approach_area_safe = rospy.get_param("~approach_area_safe", 14000)
-        self.approach_area_near = rospy.get_param("~approach_area_near", 18000)
-        self.draw_start_area_threshold = rospy.get_param("~draw_start_area_threshold", 22000)
-        self.max_safe_area = rospy.get_param("~max_safe_area", 30000) # Prevencion de choque basado en vision
+        self.approach_area_safe = rospy.get_param("~approach_area_safe", 40000)
+        self.approach_area_near = rospy.get_param("~approach_area_near", 55000)
+        self.draw_start_area_threshold = rospy.get_param("~draw_start_area_threshold", 70000)
+        self.max_safe_area = rospy.get_param("~max_safe_area", 77000) # Prevencion de choque basado en vision
 
         # Speeds
         self.search_yaw_speed = rospy.get_param("~search_yaw_speed", 0.15)
