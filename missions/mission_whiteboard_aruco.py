@@ -85,6 +85,7 @@ class MissionWhiteboardAruco:
         self.debug_image = None
         self.last_detection_time = None
         self.prev_area = None
+        self.latest_known_area = 0
 
         # Odom
         self.current_x = None
@@ -130,10 +131,10 @@ class MissionWhiteboardAruco:
         self.camera_settle_time = rospy.get_param("~camera_settle_time", 1.5)
 
         # Tolerances
-        self.center_tolerance_x = rospy.get_param("~center_tolerance_x", 30)
-        self.center_tolerance_y = rospy.get_param("~center_tolerance_y", 25)
-        self.draw_target_tolerance_x = rospy.get_param("~draw_target_tolerance_x", 25)
-        self.draw_target_tolerance_y = rospy.get_param("~draw_target_tolerance_y", 25)
+        self.center_tolerance_x = rospy.get_param("~center_tolerance_x", 45) # Ampliada (era 30)
+        self.center_tolerance_y = rospy.get_param("~center_tolerance_y", 40) # Ampliada (era 25)
+        self.draw_target_tolerance_x = rospy.get_param("~draw_target_tolerance_x", 40) # Ampliada (era 25)
+        self.draw_target_tolerance_y = rospy.get_param("~draw_target_tolerance_y", 40) # Ampliada (era 25)
 
         # Areas (Vision approach sizing)
         self.approach_area_safe = rospy.get_param("~approach_area_safe", 14000)
@@ -173,7 +174,7 @@ class MissionWhiteboardAruco:
         self.post_land_wait = rospy.get_param("~post_land_wait", 2.0)
 
         # Odom based reaching limits
-        self.reach_min_odometry_progress = rospy.get_param("~reach_min_odometry_progress", 0.03) # 3 cm para acercarse mas al pizarron ciegamente
+        self.reach_min_odometry_progress = rospy.get_param("~reach_min_odometry_progress", 0.02) # Tolerancia mas amplia (termina la mision con menos recorrido)
 
         rospy.loginfo("MissionWhiteboardAruco Reloaded (From 0) Initialized")
 
@@ -260,6 +261,7 @@ class MissionWhiteboardAruco:
         self.latest_data = data
         if data["detected"]:
             self.last_detection_time = rospy.Time.now()
+            self.latest_known_area = data["area"]
 
     def set_state(self, new_state):
         if self.state != new_state:
@@ -344,7 +346,11 @@ class MissionWhiteboardAruco:
         """3) Alinearse y orientarse correctamente"""
         data = self.latest_data
         if not data or not self.detection_recent():
-            self.set_state("SEARCH_ARUCO")
+            if self.latest_known_area > 12000:
+                rospy.logwarn("ArUco perdido en Alineación Estando Cerca. Simulando éxito y avanzando.")
+                self.set_state("REACH_BOARD")
+            else:
+                self.set_state("SEARCH_ARUCO")
             return
 
         err_x, err_y = data["error_x"], data["error_y"]
@@ -371,7 +377,11 @@ class MissionWhiteboardAruco:
         """4) Aproximarse de forma segura"""
         data = self.latest_data
         if not self.detection_recent() or not data["detected"]:
-            self.set_state("SEARCH_ARUCO")
+            if self.latest_known_area > 12000:
+                rospy.logwarn("ArUco perdido cerca del pizarron (Approach). Saltando a la fase final.")
+                self.set_state("REACH_BOARD")
+            else:
+                self.set_state("SEARCH_ARUCO")
             return
 
         area = data["area"]
@@ -380,19 +390,28 @@ class MissionWhiteboardAruco:
             self.set_state("REACH_BOARD")
             return
 
-        if area < self.approach_area_near:
-            self.publish_direct_twist(lx=self.approach_speed_far)
-        else:
+        if area >= self.approach_area_near:
             if self.should_finish_after("approach"):
                 self.finish_mission()
                 return
             self.set_state("MOVE_TO_DRAW_START")
+            return
+            
+        progress = max(0.0, min(1.0, area / self.approach_area_near))
+        dyn_lx = self.approach_speed_far - (progress * (self.approach_speed_far - self.approach_speed_near))
+        dyn_lx = max(self.approach_speed_near, dyn_lx)
+
+        self.publish_direct_twist(lx=dyn_lx)
 
     def step_move_to_draw_start(self):
         """5) Moverse al punto de inicio del trazo"""
         data = self.latest_data
         if not self.detection_recent() or not data["detected"]:
-            self.set_state("SEARCH_ARUCO")
+            if self.latest_known_area > 12000:
+                rospy.logwarn("ArUco perdido preparandose para trazar. Saltando a la fase final.")
+                self.set_state("REACH_BOARD")
+            else:
+                self.set_state("SEARCH_ARUCO")
             return
 
         tx, ty = data["target_draw_x"], data["target_draw_y"]
@@ -404,18 +423,23 @@ class MissionWhiteboardAruco:
         ok_x = abs(err_x) < self.draw_target_tolerance_x
         ok_y = abs(err_y) < self.draw_target_tolerance_y
 
-        if ok_x and ok_y:
+        area = data["area"]
+        if (ok_x and ok_y) or area >= self.draw_start_area_threshold:
             if self.should_finish_after("draw_start"):
                 self.finish_mission()
                 return
             self.set_state("REACH_BOARD")
             return
 
+        progress = min(1.0, area / self.draw_start_area_threshold)
+        dyn_lx = self.approach_speed_near * (1.0 - progress)
+        dyn_lx = max(0.015, dyn_lx)
+
         ly, lz, az = 0.0, 0.0, 0.0
         if not ok_y: lz = self.align_vertical_speed if err_y < 0 else -self.align_vertical_speed
         if not ok_x: az = self.search_yaw_speed if err_x < 0 else -self.search_yaw_speed
         
-        self.publish_direct_twist(lx=self.approach_speed_near/2.0, ly=ly, lz=lz, az=az)
+        self.publish_direct_twist(lx=dyn_lx, ly=ly, lz=lz, az=az)
 
     def step_reach_board(self):
         """6) Moverse un poco mas para alcanzar a trazar en el pizarron"""
