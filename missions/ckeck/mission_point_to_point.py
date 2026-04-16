@@ -15,6 +15,14 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from tf.transformations import euler_from_quaternion
 
+#rostopic pub --once /activacion_dron std_msgs/String "data: 'READY'"
+#rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
+#rosrun bebop_tmr ejecutor.py 
+#rosrun bebop_tmr avanzar.py 
+#rosrun bebop_tmr naranja.py 
+#rosrun bebop_tmr mission_point_to_point.py 
+#roscore
+#roslaunch bebop_driver bebop_node.launch
 
 class MissionPointToPointSingleTube:
     def __init__(self):
