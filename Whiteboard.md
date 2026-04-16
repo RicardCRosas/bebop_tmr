@@ -17,7 +17,7 @@ Asegúrate de que:
 - tu laptop esté conectada a la red del dron
 - el workspace ya esté compilado
 - el ArUco esté visible frente a la cámara (ID 100)
-- la misión tiene un timeout interno de 75 segundos (ajustado por velocidad lenta)
+- la misión tiene un timeout interno de 90 segundos (ajustado por velocidad lenta)
 - el dron aterrizará automáticamente si se acerca demasiado al pizarrón (Safe Area)
 
 ---
@@ -123,8 +123,9 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 ```
 
 ## Resultado esperado
-- Detecta el ArUco
-- Se alinea visualmente
+- Ajusta cámara a una posición
+- Busca ArUco
+- Se alinea y oriental correctamente
 - No falla
 - Puedes abortar con `q` o `e`
 
@@ -151,10 +152,8 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 ```
 
 ## Resultado esperado
-- Detecta
-- Se alinea
-- se acerca de forma segura y muy lenta
-- si se pega demasiado al pizarrón (Safe Area), aterriza inmediatamente por seguridad
+- Se aproxima de forma segura y lenta
+- Si se pega demasiado al pizarrón (Safe Area), aterriza inmediatamente por seguridad
 
 ---
 
@@ -180,11 +179,11 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 
 ## Resultado esperado
 - Ya no apunta solo al centro del ArUco
-- Se mueve al punto estimado para comenzar a pintar
+- Se mueve al punto exacto de inicio del trazo
 
 ---
 
-## Terminal 3 — etapa 4: toque del pizarrón
+## Terminal 3 — etapa 4: moverse para alcanzar a trazar
 
 ### 1. Despegar
 ```bash
@@ -196,7 +195,7 @@ rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
 
 ### 2. Ejecutar etapa
 ```bash
-rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=touch _show_debug:=true
+rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=reach_board _show_debug:=true
 ```
 
 ### 3. Aterrizar
@@ -205,10 +204,8 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 ```
 
 ## Resultado esperado
-- Avanza muy lento
-- Confirma toque usando visión + odometría
-- si el área crece demasiado (riesgo de choque), aterriza inmediatamente
-- si pierde el ArUco cerca del pizarrón, retrocede o aterriza según la fase de seguridad
+- Se mueve un poco más para alcanzar a trazar en el pizarrón.
+- Logra llegar sin presionar demasiado, usando odometría y área.
 
 ---
 
@@ -233,9 +230,7 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 ```
 
 ## Resultado esperado
-- Toca el pizarrón
-- Dibuja línea horizontal
-- Retrocede después
+- Hace el movimiento lateral para dibujar la línea
 
 ---
 
@@ -262,15 +257,15 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 ## Resultado esperado
 La misión completa debe hacer:
 
-1. ajustar cámara
+1. ajustar camara, a una posiccion 
 2. buscar ArUco
-3. alinearse
-4. aproximarse sin chocar
-5. llegar al punto de inicio del trazo
-6. confirmar toque del pizarrón
-7. dibujar la línea
+3. alinearse y orientarse correcatmente 
+4. aproximarse de forma segura
+5. moverse al punto de inicio del trazo
+6. moverse un poco mas para alcanzar a trazar en el pizarron 
+7. dibujar linea
 8. retroceder
-9. girar 90° a la derecha
+9. girar 90 grados a la derecha
 10. aterrizar
 
 ---
@@ -312,7 +307,7 @@ Luego seleccionar:
 2. `search_align`
 3. `approach`
 4. `draw_start`
-5. `touch`
+5. `reach_board`
 6. `draw`
 7. `full`
 
