@@ -352,11 +352,8 @@ class MissionWhiteboardAruco:
         if data and data["detected"]:
             self.set_state("ALIGN_AND_ORIENT")
         else:
-            # Esperar 2 segundos flotando antes de empezar a rotar como loco
-            if self.elapsed_in_state() < 2.0:
-                self.publish_direct_twist(az=0.0)
-            else:
-                self.publish_direct_twist(az=self.search_yaw_speed)
+            # Como no se desea rotar en yaw, solo nos mantenemos flotando estáticos esperando el marcador
+            self.publish_direct_twist(lx=0.0, ly=0.0, lz=0.0, az=0.0)
 
     def step_align_and_orient(self):
         """3) Alinearse y orientarse correctamente"""
@@ -364,19 +361,17 @@ class MissionWhiteboardAruco:
         if not data or not self.detection_recent():
             if self.latest_known_area > 8000:
                 rospy.logwarn("ArUco perdido en Alineación Estando Cerca. Simulando éxito y avanzando para completar.")
-                self.set_state("REACH_BOARD")
+                self.set_state("APPROACH_SAFELY")
             else:
                 self.set_state("SEARCH_ARUCO")
             return
 
         err_x, err_y = data["error_x"], data["error_y"]
-        yaw_err = data.get("marker_yaw", 0.0)
 
         ok_x = abs(err_x) < self.center_tolerance_x
         ok_y = abs(err_y) < self.center_tolerance_y
-        ok_yaw = abs(yaw_err) < 0.15
 
-        if ok_x and ok_y and ok_yaw:
+        if ok_x and ok_y:
             if self.should_finish_after("search_align"):
                 self.finish_mission()
                 return
@@ -384,9 +379,10 @@ class MissionWhiteboardAruco:
             return
 
         lx, ly, lz, az = 0.0, 0.0, 0.0, 0.0
+        # Moverse en Z (vertical) para compensar error en Y de la imagen
         if not ok_y: lz = self.align_vertical_speed if err_y < 0 else -self.align_vertical_speed
-        if not ok_yaw: ly = -self.align_lateral_speed if yaw_err > 0 else self.align_lateral_speed
-        if not ok_x: az = self.search_yaw_speed if err_x < 0 else -self.search_yaw_speed
+        # Moverse en Y (lateral) para compensar error en X de la imagen, sin rotar en yaw
+        if not ok_x: ly = self.align_lateral_speed if err_x < 0 else -self.align_lateral_speed
         self.publish_direct_twist(lx, ly, lz, az)
 
     def step_approach_safely(self):
@@ -394,23 +390,17 @@ class MissionWhiteboardAruco:
         data = self.latest_data
         if not self.detection_recent() or not data["detected"]:
             if self.latest_known_area > 8000:
-                rospy.logwarn("ArUco perdido cerca del pizarron (Approach). Saltando directo a completar mision.")
-                self.set_state("REACH_BOARD")
+                rospy.logwarn("ArUco perdido cerca del pizarron (Approach). Aterrizando.")
+                self.set_state("LAND")
             else:
                 self.set_state("SEARCH_ARUCO")
             return
 
         area = data["area"]
-        if area > self.max_safe_area:
+        if area > self.max_safe_area or area >= self.approach_area_near:
+            rospy.loginfo("Distancia segura alcanzada frente al pizarron. Aterrizando.")
             self.stop()
-            self.set_state("REACH_BOARD")
-            return
-
-        if area >= self.approach_area_near:
-            if self.should_finish_after("approach"):
-                self.finish_mission()
-                return
-            self.set_state("MOVE_TO_DRAW_START")
+            self.set_state("LAND")
             return
             
         progress = max(0.0, min(1.0, area / self.approach_area_near))

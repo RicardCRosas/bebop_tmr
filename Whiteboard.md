@@ -124,8 +124,8 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 
 ## Resultado esperado
 - Ajusta cámara a una posición
-- Busca ArUco
-- Se alinea y oriental correctamente
+- Busca ArUco (se mantiene flotando sin rotar en yaw)
+- Se alinea correctamente usando solo traslación (sin yaw)
 - No falla
 - Puedes abortar con `q` o `e`
 
@@ -153,88 +153,11 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 
 ## Resultado esperado
 - Se aproxima de forma segura y lenta
-- Si se pega demasiado al pizarrón (Safe Area), aterriza inmediatamente por seguridad
+- Una vez alcanzada la distancia segura frente al pizarrón, aterriza automáticamente finalizando la misión.
 
 ---
 
-## Terminal 3 — etapa 3: punto de inicio del trazo
-
-### 1. Despegar
-```bash
-cd ~/bebop_ws
-source /opt/ros/noetic/setup.bash
-source devel/setup.bash
-rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
-```
-
-### 2. Ejecutar etapa
-```bash
-rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=draw_start _show_debug:=true
-```
-
-### 3. Aterrizar
-```bash
-rostopic pub --once /bebop/land std_msgs/Empty "{}"
-```
-
-## Resultado esperado
-- Ya no apunta solo al centro del ArUco
-- Se mueve al punto exacto de inicio del trazo
-
----
-
-## Terminal 3 — etapa 4: moverse para alcanzar a trazar
-
-### 1. Despegar
-```bash
-cd ~/bebop_ws
-source /opt/ros/noetic/setup.bash
-source devel/setup.bash
-rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
-```
-
-### 2. Ejecutar etapa
-```bash
-rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=reach_board _show_debug:=true
-```
-
-### 3. Aterrizar
-```bash
-rostopic pub --once /bebop/land std_msgs/Empty "{}"
-```
-
-## Resultado esperado
-- Se mueve un poco más para alcanzar a trazar en el pizarrón.
-- Logra llegar sin presionar demasiado, usando odometría y área.
-
----
-
-## Terminal 3 — etapa 5: dibujar línea
-
-### 1. Despegar
-```bash
-cd ~/bebop_ws
-source /opt/ros/noetic/setup.bash
-source devel/setup.bash
-rostopic pub --once /bebop/takeoff std_msgs/Empty "{}"
-```
-
-### 2. Ejecutar etapa
-```bash
-rosrun bebop_tmr mission_whiteboard_aruco.py _test_mode:=draw _show_debug:=true
-```
-
-### 3. Aterrizar
-```bash
-rostopic pub --once /bebop/land std_msgs/Empty "{}"
-```
-
-## Resultado esperado
-- Hace el movimiento lateral para dibujar la línea
-
----
-
-## Terminal 3 — etapa 6: misión completa
+## Terminal 3 — misión completa
 
 ### 1. Despegar
 ```bash
@@ -255,18 +178,13 @@ rostopic pub --once /bebop/land std_msgs/Empty "{}"
 ```
 
 ## Resultado esperado
-La misión completa debe hacer:
+La misión completa ahora consiste en:
 
-1. ajustar camara, a una posiccion 
-2. buscar ArUco
-3. alinearse y orientarse correcatmente 
+1. ajustar cámara a una posición
+2. buscar ArUco (sin rotar)
+3. alinearse y orientarse con pura traslación (sin yaw)
 4. aproximarse de forma segura
-5. moverse al punto de inicio del trazo
-6. moverse un poco mas para alcanzar a trazar en el pizarron 
-7. dibujar linea
-8. retroceder
-9. girar 90 grados a la derecha
-10. aterrizar
+5. aterrizar una vez alcanzada la distancia segura
 
 ---
 
@@ -306,10 +224,7 @@ Luego seleccionar:
 1. `test_aruco_bebop_camera.py`
 2. `search_align`
 3. `approach`
-4. `draw_start`
-5. `reach_board`
-6. `draw`
-7. `full`
+4. `full`
 
 ---
 
