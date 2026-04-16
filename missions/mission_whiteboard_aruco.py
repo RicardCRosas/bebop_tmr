@@ -126,7 +126,7 @@ class MissionWhiteboardAruco:
         self.image_height = rospy.get_param("~image_height", 360)
 
         # Camera
-        self.camera_tilt_start = rospy.get_param("~camera_tilt_start", -20.0) # ajustando inclinación para ver mejor el aruco y pista
+        self.camera_tilt_start = rospy.get_param("~camera_tilt_start", 0.0) # Apuntando al frente para no perderlo al inicio
         self.camera_pan_start = rospy.get_param("~camera_pan_start", 0.0)
         self.camera_settle_time = rospy.get_param("~camera_settle_time", 1.5)
 
@@ -147,11 +147,11 @@ class MissionWhiteboardAruco:
         self.align_lateral_speed = rospy.get_param("~align_lateral_speed", 0.08)
         self.align_vertical_speed = rospy.get_param("~align_vertical_speed", 0.08)
 
-        self.approach_speed_far = rospy.get_param("~approach_speed_far", 0.08)
-        self.approach_speed_near = rospy.get_param("~approach_speed_near", 0.04)
+        self.approach_speed_far = rospy.get_param("~approach_speed_far", 0.05) # Mucho más lento desde lejos (era 0.08)
+        self.approach_speed_near = rospy.get_param("~approach_speed_near", 0.015) # Super lento al acercarse (era 0.04)
 
         # Reach Board
-        self.reach_forward_speed = rospy.get_param("~reach_forward_speed", 0.03)
+        self.reach_forward_speed = rospy.get_param("~reach_forward_speed", 0.015)
         self.reach_forward_time_max = rospy.get_param("~reach_forward_time_max", 4.5)
         
         # Drawing
@@ -340,14 +340,18 @@ class MissionWhiteboardAruco:
         if data and data["detected"]:
             self.set_state("ALIGN_AND_ORIENT")
         else:
-            self.publish_direct_twist(az=self.search_yaw_speed)
+            # Esperar 2 segundos flotando antes de empezar a rotar como loco
+            if self.elapsed_in_state() < 2.0:
+                self.publish_direct_twist(az=0.0)
+            else:
+                self.publish_direct_twist(az=self.search_yaw_speed)
 
     def step_align_and_orient(self):
         """3) Alinearse y orientarse correctamente"""
         data = self.latest_data
         if not data or not self.detection_recent():
-            if self.latest_known_area > 12000:
-                rospy.logwarn("ArUco perdido en Alineación Estando Cerca. Simulando éxito y avanzando.")
+            if self.latest_known_area > 8000:
+                rospy.logwarn("ArUco perdido en Alineación Estando Cerca. Simulando éxito y avanzando para completar.")
                 self.set_state("REACH_BOARD")
             else:
                 self.set_state("SEARCH_ARUCO")
@@ -377,8 +381,8 @@ class MissionWhiteboardAruco:
         """4) Aproximarse de forma segura"""
         data = self.latest_data
         if not self.detection_recent() or not data["detected"]:
-            if self.latest_known_area > 12000:
-                rospy.logwarn("ArUco perdido cerca del pizarron (Approach). Saltando a la fase final.")
+            if self.latest_known_area > 8000:
+                rospy.logwarn("ArUco perdido cerca del pizarron (Approach). Saltando directo a completar mision.")
                 self.set_state("REACH_BOARD")
             else:
                 self.set_state("SEARCH_ARUCO")
@@ -407,8 +411,8 @@ class MissionWhiteboardAruco:
         """5) Moverse al punto de inicio del trazo"""
         data = self.latest_data
         if not self.detection_recent() or not data["detected"]:
-            if self.latest_known_area > 12000:
-                rospy.logwarn("ArUco perdido preparandose para trazar. Saltando a la fase final.")
+            if self.latest_known_area > 8000:
+                rospy.logwarn("ArUco perdido preparandose para trazar. Saltando directo a completar mision.")
                 self.set_state("REACH_BOARD")
             else:
                 self.set_state("SEARCH_ARUCO")
@@ -433,7 +437,7 @@ class MissionWhiteboardAruco:
 
         progress = min(1.0, area / self.draw_start_area_threshold)
         dyn_lx = self.approach_speed_near * (1.0 - progress)
-        dyn_lx = max(0.015, dyn_lx)
+        dyn_lx = max(0.010, dyn_lx)
 
         ly, lz, az = 0.0, 0.0, 0.0
         if not ok_y: lz = self.align_vertical_speed if err_y < 0 else -self.align_vertical_speed
