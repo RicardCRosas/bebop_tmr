@@ -137,33 +137,33 @@ class MissionWhiteboardAruco:
         self.draw_target_tolerance_y = rospy.get_param("~draw_target_tolerance_y", 40) # Ampliada (era 25)
 
         # Areas (Vision approach sizing)
-        self.approach_area_safe = rospy.get_param("~approach_area_safe", 40000)
-        self.approach_area_near = rospy.get_param("~approach_area_near", 55000)
-        self.draw_start_area_threshold = rospy.get_param("~draw_start_area_threshold", 70000)
-        self.max_safe_area = rospy.get_param("~max_safe_area", 77000) # Prevencion de choque basado en vision
+        self.approach_area_safe = rospy.get_param("~approach_area_safe", 7000)
+        self.approach_area_near = rospy.get_param("~approach_area_near", 31000)
+        self.draw_start_area_threshold = rospy.get_param("~draw_start_area_threshold", 36000)
+        self.max_safe_area = rospy.get_param("~max_safe_area", 40000) # Prevencion de choque basado en vision
 
         # Speeds
-        self.search_yaw_speed = rospy.get_param("~search_yaw_speed", 0.15)
-        self.align_lateral_speed = rospy.get_param("~align_lateral_speed", 0.08)
-        self.align_vertical_speed = rospy.get_param("~align_vertical_speed", 0.08)
+        self.search_yaw_speed = rospy.get_param("~search_yaw_speed", 0.05)
+        self.align_lateral_speed = rospy.get_param("~align_lateral_speed", 0.03)
+        self.align_vertical_speed = rospy.get_param("~align_vertical_speed", 0.03)
 
-        self.approach_speed_far = rospy.get_param("~approach_speed_far", 0.05) # Mucho más lento desde lejos (era 0.08)
-        self.approach_speed_near = rospy.get_param("~approach_speed_near", 0.015) # Super lento al acercarse (era 0.04)
+        self.approach_speed_far = rospy.get_param("~approach_speed_far", 0.02) # Muy lento desde lejos
+        self.approach_speed_near = rospy.get_param("~approach_speed_near", 0.005) # Muy pero muy lento cerca
 
         # Reach Board
-        self.reach_forward_speed = rospy.get_param("~reach_forward_speed", 0.015)
+        self.reach_forward_speed = rospy.get_param("~reach_forward_speed", 0.005)
         self.reach_forward_time_max = rospy.get_param("~reach_forward_time_max", 4.5)
         
         # Drawing
         self.draw_forward_bias = rospy.get_param("~draw_forward_bias", 0.0) # Sin presionar fuertemente
-        self.draw_lateral_speed = rospy.get_param("~draw_lateral_speed", -0.07) # Dibujar de izq a derecha
+        self.draw_lateral_speed = rospy.get_param("~draw_lateral_speed", -0.03) # Dibujar de izq a derecha
         self.draw_time = rospy.get_param("~draw_time", 3.0)
 
         # Backoff & Landing
-        self.backoff_speed = rospy.get_param("~backoff_speed", -0.07)
+        self.backoff_speed = rospy.get_param("~backoff_speed", -0.04)
         self.backoff_time = rospy.get_param("~backoff_time", 2.5)
 
-        self.rotate_right_speed = rospy.get_param("~rotate_right_speed", -0.15)
+        self.rotate_right_speed = rospy.get_param("~rotate_right_speed", -0.05)
         self.rotate_timeout = rospy.get_param("~rotate_timeout", 8.0)
         self.rotate_yaw_tolerance = rospy.get_param("~rotate_yaw_tolerance", 0.08)
 
@@ -174,7 +174,8 @@ class MissionWhiteboardAruco:
         self.post_land_wait = rospy.get_param("~post_land_wait", 2.0)
 
         # Odom based reaching limits
-        self.reach_min_odometry_progress = rospy.get_param("~reach_min_odometry_progress", 0.02) # Tolerancia mas amplia (termina la mision con menos recorrido)
+        self.reach_min_odometry_progress = rospy.get_param("~reach_min_odometry_progress", 0.08) # Distancia final de seguridad (8 cm)
+        self.blind_approach_dist = rospy.get_param("~blind_approach_dist", 0.15) # Máxima distancia a avanzar si se pierde el ArUco
 
         rospy.loginfo("MissionWhiteboardAruco Reloaded (From 0) Initialized")
 
@@ -359,11 +360,15 @@ class MissionWhiteboardAruco:
         """3) Alinearse y orientarse correctamente"""
         data = self.latest_data
         if not data or not self.detection_recent():
-            if self.latest_known_area > 8000:
-                rospy.logwarn("ArUco perdido en Alineación Estando Cerca. Simulando éxito y avanzando para completar.")
+            if self.latest_known_area > 10000:
+                rospy.logwarn("ArUco perdido pero área alta (>10000). Usando memoria de odometría para avanzar.")
+                # Asegurar que tenemos un punto de referencia para medir progreso
+                if self.reach_start_x is None:
+                    self.reach_start_x, self.reach_start_y, self.reach_start_z = self.current_x, self.current_y, self.current_z
                 self.set_state("APPROACH_SAFELY")
             else:
-                self.set_state("SEARCH_ARUCO")
+                rospy.logwarn("ArUco perdido lejos. Manteniendo posición estable.")
+                self.stop()
             return
 
         err_x, err_y = data["error_x"], data["error_y"]
@@ -389,18 +394,23 @@ class MissionWhiteboardAruco:
         """4) Aproximarse de forma segura"""
         data = self.latest_data
         if not self.detection_recent() or not data["detected"]:
-            if self.latest_known_area > 8000:
-                rospy.logwarn("ArUco perdido cerca del pizarron (Approach). Aterrizando.")
-                self.set_state("LAND")
+            # OPCIÓN 3: MEMORIA DE ODOMETRÍA
+            progress = self.get_odom_progress_in_reach()
+            if self.latest_known_area > 15000 and progress < self.blind_approach_dist:
+                rospy.loginfo_throttle(1.0, f"Vuelo ciego (Memoria): {progress:.2f}/{self.blind_approach_dist:.2f} m")
+                self.publish_direct_twist(lx=self.approach_speed_near)
             else:
-                self.set_state("SEARCH_ARUCO")
+                rospy.logwarn("Límite de memoria de odometría alcanzado. Pasando a preparar trazo.")
+                self.set_state("MOVE_TO_DRAW_START")
             return
 
         area = data["area"]
         if area > self.max_safe_area or area >= self.approach_area_near:
-            rospy.loginfo("Distancia segura alcanzada frente al pizarron. Aterrizando.")
-            self.stop()
-            self.set_state("LAND")
+            rospy.loginfo("Distancia segura alcanzada frente al pizarron.")
+            if self.should_finish_after("approach"):
+                self.finish_mission()
+                return
+            self.set_state("MOVE_TO_DRAW_START")
             return
             
         progress = max(0.0, min(1.0, area / self.approach_area_near))
@@ -413,11 +423,12 @@ class MissionWhiteboardAruco:
         """5) Moverse al punto de inicio del trazo"""
         data = self.latest_data
         if not self.detection_recent() or not data["detected"]:
-            if self.latest_known_area > 8000:
-                rospy.logwarn("ArUco perdido preparandose para trazar. Saltando directo a completar mision.")
-                self.set_state("REACH_BOARD")
+            progress = self.get_odom_progress_in_reach()
+            if self.latest_known_area > 15000 and progress < self.blind_approach_dist:
+                self.publish_direct_twist(lx=self.approach_speed_near)
             else:
-                self.set_state("SEARCH_ARUCO")
+                rospy.logwarn("Sin visión. Usando odometría para completar contacto.")
+                self.set_state("REACH_BOARD")
             return
 
         tx, ty = data["target_draw_x"], data["target_draw_y"]
@@ -506,6 +517,22 @@ class MissionWhiteboardAruco:
 
         self.publish_direct_twist(az=self.rotate_right_speed)
 
+    def step_recover_backward(self):
+        """Espera estática si se pierde el ArUco"""
+        data = self.latest_data
+        if data and data["detected"]:
+            rospy.loginfo("ArUco recuperado. Regresando a centrar.")
+            self.set_state("ALIGN_AND_ORIENT")
+            return
+        
+        # Detenerse en lugar de retroceder
+        self.stop()
+
+        # Si pasa más de 5 segundos sin rastro, aterrizar
+        if self.elapsed_in_state() > 5.0:
+            rospy.logwarn("Tiempo de espera agotado. Aterrizando por seguridad.")
+            self.set_state("LAND")
+
     def step_land(self):
         """10) Aterrizar"""
         self.stop()
@@ -531,6 +558,7 @@ class MissionWhiteboardAruco:
         elif self.state == "BACK_OFF": self.step_back_off()
         elif self.state == "ROTATE_RIGHT_90": self.step_rotate_right_90()
         elif self.state == "LAND": self.step_land()
+        elif self.state == "RECOVER_BACKWARD": self.step_recover_backward()
         elif self.state == "DONE": self.finish_mission()
 
     def fail_mission(self, msg="n/a"):
